@@ -7,7 +7,7 @@ dataset:
   dataset_path: data/acrobot_frames
   mode: window # image, pair, window, trajectory
   image_size: 32
-  normalize: true # GPE expects [-1, 1]; false gives [0, 1].
+  normalize: true # The from-scratch codec uses [-1, 1].
   seq_length: 2
   prediction_horizon: 1
   time_lag: 1
@@ -22,6 +22,41 @@ dataset:
   batch_size: 32
   num_workers: 0
 
+model:
+  latent_dim: 8
+  width: 128
+  time_scale: 30.0
+
+training:
+  seed: 42
+  device: auto
+  codec_epochs: 5
+  codec_lr: 0.001
+  epochs: 20
+  lr: 0.0003
+  max_grad_norm: 1.0
+  include_diffusion: true
+  checkpoint_path: null
+  load_weights_only: false
+
+visualization:
+  enabled: true
+  every_n_epochs: 1
+  num_fixed_test_samples: 2
+  rollout_plot_frames: 8
+  fps: 10
+
+evaluation:
+  checkpoint: last.pt
+  horizons: [1]
+  fvd: false
+
+paths:
+  checkpoint_dir: experiments/acrobot_frames/checkpoints
+  log_dir: experiments/acrobot_frames/logs
+  result_dir: experiments/acrobot_frames/results
+  figure_dir: experiments/acrobot_frames/figures
+
 notes:
-  status: dataset_ready
-  comment: Dataset configuration only; unified frame-model training is not connected yet.
+  status: from_scratch_pipeline_baseline
+  comment: Independent MLP codec, not GPE or a reproduction of the paper image experiment.
