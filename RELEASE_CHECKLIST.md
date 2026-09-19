@@ -1,54 +1,60 @@
-# 发布前检查与未完成事项
+# Pre-Release Checklist and Outstanding Work
 
-本文件是发布准备清单，不是双盲合规认证。自动扫描只能覆盖文件中的常见标识，
-不能证明账号、提交记录、数据托管或会议政策均符合双盲要求。
+This is a preparation checklist, not double-blind compliance certification.
+Automated scans detect common file-level identifiers; they cannot establish
+that accounts, commit history, data hosts or submission practices are anonymous.
 
-## 必须补充
+## Required Follow-Up
 
-| 项目 | 当前情况 | 发布前动作 |
+| Item | Current status | Before release |
 | --- | --- | --- |
-| 投稿场所的双盲政策 | 已指定 ICLR 2027 | 核对匿名页面、外链和补充材料；按作者指南提供 AI 使用声明 |
-| 项目整体许可证 | 当前源码已删除 GPE 编解码器，改为读者自行获取 | 旧 Git 提交仍需清理；保留 RIVER 等第三方许可，项目整体许可证仍需权利人确认 |
-| NSE 原始实验数据 | Zenodo 10939479，五个 PT 文件，约 26.2 GB | 核对格式、完整模拟参数、SHA-256 及第一/第三文件的重复校验值；链接见 DATASETS.md |
-| Acrobot 原始基准 | 已提供原生成程序，新增兼容入口 | 确认论文实际种子和参数；原 noisy-RK45 不是标准 SDE 离散化；默认采样间隔为 8/239，不是 1/30 |
-| 论文报告的 FVD | 已核对服务器：TorchScript I3D，OneDrive 为注释代码 | 已记录实际权重 SHA-256 和 10+30 帧协议；仍需对齐样本划分、clip 起点和论文结果；见 FVD.md |
-| 真实实验复现 | 未完成完整训练与论文指标复现 | 记录最终命令、配置、种子、硬件、耗时及各项指标，与论文逐项核对 |
-| Acrobot 图像帧/GPE | 已接通不依赖预训练权重的独立 MLP 编解码器 baseline | 已实现原图输入、PhiBE latent 训练、多步预测、解码和测试可视化；这不是 GPE 论文实验，外部 GPE 对接及 Acrobot FVD 仍待完成 |
+| Venue policy | ICLR 2027 is the intended venue | Check current author guidance for anonymous pages, external links, supplementary material and applicable AI disclosures |
+| Project-wide license | GPE codec definitions removed from the current tree; readers obtain them separately | Address historical copies; retain third-party licenses; obtain rights-holder confirmation for the overall project license |
+| NSE experimental data | Zenodo 10939479, five PT files, approximately 26.2 GB | Verify schema, simulation metadata, SHA-256 and the first/third-file checksum duplication; see DATASETS.md |
+| Original Acrobot benchmark | Original-style generator recipe and portable entrypoint available | Confirm paper seeds/settings; noisy RK45 is not a standard SDE discretization; default sampling interval is 8/239, not 1/30 |
+| Reported FVD | Server uses TorchScript I3D; OneDrive reference appears in commented code | Detector hash and 10+30-frame protocol recorded; still align split, clip starts and paper results; see FVD.md |
+| Experiment reproduction | Full-budget convergence and paper metrics not reproduced | Record final commands, configs, seeds, hardware, timing and metrics and compare with each reported result |
+| Acrobot images/GPE | MLP, external GPE source/T-S weights and TorchScript switching connected | Pipeline runs through image input, latent PhiBE training, rollout, decoding and visualization; geometric GPE training recipe, public compatible weights and Acrobot FVD remain outstanding |
 
-ICLR 2027 作者指南：https://iclr.cc/Conferences/2027/AuthorGuidelines 。
-会议并不要求仓库必须采用 GPL；许可证义务来自所使用的第三方代码。
-GPL 允许使用、修改和商业用途，但传播其覆盖的修改/组合作品时有保留声明、
-提供对应源码和 GPL 授权等义务；不能用该标签覆盖另有用途和再分发限制的 GPE。
+Review the [ICLR 2027 author guidelines](https://iclr.cc/Conferences/2027/AuthorGuidelines)
+before submission. Venue requirements and third-party license obligations are
+separate. Do not assume that selecting GPL for the project grants permission to
+redistribute GPE or overrides its separate terms. See LICENSE_STATUS.md and the
+retained third-party license texts; obtain appropriate review where necessary.
 
-原图像流程还发现两个需要核对的实验选择：`smooth.py` 对整段轨迹进行高斯平滑，
-`2d24d.py` 使用向前差分构造当前 latent 的速度。这些操作可能用到预测起点之后
-的帧；若作为历史条件输入，会导致未来信息泄漏。不能不说明地照搬，也不能
-直接改成因果处理后声称复现原论文数字。
+Two choices in the earlier image preprocessing require particular attention:
+`smooth.py` smooths an entire trajectory, and `2d24d.py` uses forward differences
+to construct a current latent velocity. These operations may use frames after
+the forecast origin. Using them as conditioning can leak future targets.
+Neither copying this preprocessing without disclosure nor silently replacing it
+with a causal variant establishes reproduction of the original reported numbers.
 
-## 已整理
+## Completed Preparation
 
-- 训练配置使用可移植相对路径，清理了旧配置中的个人目录。
-- 增加依赖文件、公开 KTH 下载、SHA-256 验证、AVI 转 HDF5、数据运行前检查。
-- 添加明确标记为演示的 Acrobot 生成器，NSE 大文件可转换为 memory-mapped NPY。
-- 统一入口支持四个数据集，其中图片 Acrobot 为独立的从零训练 baseline；默认评估 last.pt，避免按测试集挑选 best.pt 后当作独立结果。
-- 发布导出采用白名单，排除数据、权重、日志、旧实验入口、私人工作文档及所有 Git 历史。
-- ZIP 使用固定时间戳，附文件 SHA-256 清单；增加自动扫描、回归测试及 CPU CI 工作流。
-- 保留第三方作者的版权声明，这些声明不应为匿名目的而删除。
+- Configurations use portable project-relative paths instead of personal directories.
+- Dependencies, explicit KTH downloads, hashes, AVI-to-HDF5 conversion and setup checks are provided.
+- Acrobot demonstration generation is labeled as such; NSE shards can be converted to memory-mapped NPY.
+- Unified entrypoints cover four datasets. Acrobot images support MLP and reader-owned GPE/TorchScript codecs. Evaluation defaults to last.pt rather than test-selected best.pt.
+- A positive source allowlist excludes data, weights, logs, retired entrypoints, private notes and all Git history.
+- ZIP timestamps are fixed and file hashes are recorded; regression tests and CPU CI are included.
+- Third-party copyright notices are retained and must not be removed for anonymity.
 
-## 匿名发布流程
+## Anonymous Publication Procedure
 
-1. 运行 `python scripts/audit_release.py`；可用多次 `--deny-token` 在本地额外检查自己的姓名、机构、账号等，扫描报告不会回显这些 token。
-2. 运行 `python scripts/audit_release.py --require-ready`。数据 URL、校验值或项目 LICENSE 缺失时应失败，不要绕过后宣称完整就绪。
-3. 运行 `python scripts/export_release.py`，只使用输出的 `.release/anonymous-code/`，不要上传整个工作目录。
-4. 在全新匿名账号下创建全新仓库，不要 fork、mirror、复制旧 .git 或直接推送原分支；保留第三方来源说明。
-5. 在发布目录重新 `git init`，使用无身份关联的本地 Git 姓名和邮箱；不要使用个人签名密钥或带真实账号的提交签名。
-6. 上传前检查 `git log --format=fuller`、`git remote -v`、暂存文件列表及仓库主页；账号头像、简介、组织、赞助、主页、贡献关联都不能暴露身份。
-7. 检查外链的数据托管账号、共享文件所有者、论文/PDF 元数据、图片 EXIF、notebook 输出、TensorBoard 文件和 checkpoint 内嵌路径；未审核的二进制文件不要上传。
-8. 本地用干净发布目录跑测试和 README 命令，再到 GitHub 检查 Actions 是否通过。Actions 日志也可能暴露配置、主机名、路径和账号。
-9. 按会议政策决定是否公开 Issues、Discussions、Actions 及评审期更新；不要从实名账号提交、评论或关联该匿名仓库。
+1. Run `python scripts/audit_release.py`. Add repeated `--deny-token` options locally for names, affiliations or account handles; reports do not echo those tokens.
+2. Run `python scripts/audit_release.py --require-ready`. Missing required assets, checksums or a project LICENSE must not be bypassed and then described as a complete release.
+3. Run `python scripts/export_release.py`. Review its `.release/anonymous-code/` output rather than uploading the whole working directory.
+4. If providing a direct anonymous GitHub link, create a fresh repository under an unlinked anonymous account. Do not fork, mirror or copy an old .git directory. Preserve third-party attribution.
+5. For that fresh repository, use a non-identifying local Git name/email and avoid personally identifying signing keys.
+6. Inspect commit authors, remotes, staged files and repository/account metadata, including avatars, biography, organizations, sponsorship and linked activity.
+7. Review linked data-host accounts, shared-file ownership, PDF metadata, image EXIF, notebook output, TensorBoard files and embedded checkpoint paths. Do not publish unreviewed binaries.
+8. Test the clean export and README commands, then inspect Actions. CI logs can disclose paths, hosts, accounts or configuration.
+9. Follow venue policy for Issues, Discussions, Actions and review-period updates. Avoid personal-account interactions that identify an anonymous repository.
 
-以上步骤 4-6 针对直接提供 GitHub 链接的路径。若使用匿名代理，原 GitHub 仓库
-可以保持个人账号下的私有状态；投稿仅提供匿名链接，并用未登录状态检查匿名
-视图和下载文件。代理必须有合法读取和发布权限；它不会自动解决源码许可证。
+Steps 4-6 describe direct anonymous GitHub hosting. With an anonymization proxy,
+the source repository may remain private under a personal account. Submit only
+the anonymous URL and inspect both its logged-out view and downloadable files.
+The proxy needs appropriate access and redistribution permission; it does not
+resolve source licensing automatically.
 
-发布包目前应视为 **draft**。即使源码扫描通过，也不能替代以上人工检查。
+The artifact remains a **draft**. A clean source scan cannot replace these manual checks.

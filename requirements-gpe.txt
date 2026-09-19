@@ -1,0 +1,3 @@
+# Adapter-only optional dependencies. Install base requirements first, then use --no-deps.
+torchcfm==1.0.7
+POT==0.9.4

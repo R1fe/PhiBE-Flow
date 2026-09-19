@@ -10,6 +10,8 @@
 - Synthetic HDF5/NPZ/NPY inputs, conversion checks and fixed comparison GIF frames.
 - Tiny CPU training/evaluation, checkpoint loading, KTH resume and no-update mode.
 - A clean source export independent of sibling development directories.
+- External Acrobot codec source/state-dictionary/TorchScript switching, strict
+  identity checks, frozen parameters and standalone checkpoint evaluation.
 
 The test suite deliberately uses small synthetic data/models. Real KTH codec
 weights can be checked separately with `check_setup.py --load-codec`. Passing
@@ -58,9 +60,12 @@ when enabled, includes the true conditioning prefix and generated suffix.
 
 No full-scale convergence or paper-table reproduction is asserted by this
 artifact. Exact NSE/Acrobot benchmark assets are pending. Acrobot frames has a
-from-scratch MLP codec pipeline baseline, not the paper's GPE experiment. Its
-PhiBE loss trains a predictor on frozen latents; codec reconstruction uses only
-training frames. No Acrobot FVD result is claimed. KTH CPU integration tests use reduced
+from-scratch MLP and reader-supplied GPE/TorchScript codec backends, not a verified
+reproduction of the paper's GPE experiment. Its PhiBE loss trains a predictor on
+frozen latents; optional codec reconstruction uses only training frames and does
+not implement GPE's geometric objective. Actual upstream source was exercised
+separately; see EXTERNAL_CODECS.md for the revision and interface contract.
+No Acrobot FVD result is claimed. KTH CPU integration tests use reduced
 predictors; full reference settings require substantially more memory/compute.
 
 KTH restores optimizer, EMA, epoch, global step and RNG states. Resume after a

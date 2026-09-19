@@ -21,7 +21,7 @@ as evidence that paper results have been reproduced.
 | Acrobot angles | Implemented; direct state prediction | Demo and supplied noisy-RK45 recipe included; paper settings need verification |
 | NSE | Implemented; conditioned image-space U-Net | Zenodo downloads identified; schema, checksums and protocol verification pending |
 | KTH | Implemented; frozen VQ-VAE + time-conditioned Transformer | Public video/codec download and conversion commands included |
-| Acrobot frames | From-scratch image codec + PhiBE latent train/test | No pretrained weights needed for the pipeline baseline; not the paper's GPE experiment |
+| Acrobot frames | MLP / external GPE / TorchScript codec + PhiBE latent train/test | Source and T/S interfaces connected; no-weight warmup is not the paper's GPE training |
 
 No separate validation split is created. Acrobot splits trajectories, NSE splits
 sorted whole files, and KTH splits whole videos 80:20. Small datasets are rounded
@@ -121,7 +121,21 @@ or a claim to reproduce the paper's image experiment.
 Logs include per-stage timers, codec reconstruction error and a last-frame-copy
 baseline. Pixel metrics exclude conditioning frames and use pixels in [0,1].
 Acrobot FVD remains unimplemented for this baseline; enabling it fails explicitly.
-See [EXTERNAL_CODECS.md](EXTERNAL_CODECS.md) for the separate GPE dependency.
+To switch to reader-downloaded GPE without changing training code:
+
+```bash
+git clone https://github.com/wonjunee/GPE_codes.git external/GPE_codes
+python -m pip install --no-deps -r requirements-gpe.txt
+python scripts/check_setup.py --config configs/acrobot_frames_gpe.yaml --trust-external-code --load-codec
+python scripts/train.py --config configs/acrobot_frames_gpe.yaml --trust-external-code
+python scripts/eval.py --config configs/acrobot_frames_gpe.yaml --trust-external-code
+```
+
+Review upstream terms before downloading and external code before execution.
+This first-run config uses random external architectures with reconstruction
+warmup, not GPE's geometric objective. Original T.pth/S.pth loading, matching
+class selection, TorchScript and checkpoint compatibility are documented in
+[EXTERNAL_CODECS.md](EXTERNAL_CODECS.md). No GPE source or weights are bundled.
 
 ## KTH: Download, Prepare, Train, Test
 
@@ -232,3 +246,6 @@ for limitations and [DATASETS.md](DATASETS.md) for exact input formats.
 Retain [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and `licenses/`.
 Anonymity is not a reason to remove third-party attribution. Project-wide
 license selection is pending in [LICENSE_STATUS.md](LICENSE_STATUS.md).
+
+For a file-by-file explanation of the released code, see
+[CODE_GUIDE.md](CODE_GUIDE.md).
