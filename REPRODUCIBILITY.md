@@ -57,8 +57,10 @@ when enabled, includes the true conditioning prefix and generated suffix.
 ## Known Limits
 
 No full-scale convergence or paper-table reproduction is asserted by this
-artifact. Exact NSE/Acrobot benchmark assets are pending. Acrobot frames/GPE is
-loader-only in the unified interface. KTH CPU integration tests use reduced
+artifact. Exact NSE/Acrobot benchmark assets are pending. Acrobot frames has a
+from-scratch MLP codec pipeline baseline, not the paper's GPE experiment. Its
+PhiBE loss trains a predictor on frozen latents; codec reconstruction uses only
+training frames. No Acrobot FVD result is claimed. KTH CPU integration tests use reduced
 predictors; full reference settings require substantially more memory/compute.
 
 KTH restores optimizer, EMA, epoch, global step and RNG states. Resume after a
@@ -68,5 +70,5 @@ resume implementations. No cross-platform bitwise reproducibility is promised.
 
 The tested dependency profile is deliberately conservative. A fresh supported
 environment and the optional real-data smoke checks should be run before making
-a public reproducibility claim. CI is provided but has not run on GitHub until
-the repository is created and its workflow completes.
+a public reproducibility claim. Check the workflow result for the exact release
+commit; passing CPU tests does not establish benchmark accuracy.

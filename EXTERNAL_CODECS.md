@@ -27,16 +27,18 @@ default model is not claimed to be a drop-in Acrobot model: image dimensions,
 normalization, latent size and the training objective must match. No compatible
 public Acrobot checkpoint or complete codec training recipe is provided here yet.
 
-## Current image-experiment limitation
+## Independent image pipeline versus paper reproduction
 
-`AcrobotFramesDataset` reads images, but the unified `scripts/train.py` and
-`scripts/eval.py` do not yet implement the Acrobot image-input experiment.
-The local legacy latent scripts use precomputed latent trajectories; they are
-not an end-to-end raw-image pipeline and are not included in the release.
+The unified `scripts/train.py` and `scripts/eval.py` now support an independent
+from-scratch MLP autoencoder baseline. It trains the codec on training images,
+freezes it, learns time-conditioned PhiBE latent dynamics, decodes predictions
+and compares them with original test pixels. Fixed-test GIFs and rollout PNGs
+are generated each predictor epoch. See README.md for commands; no external
+codec or weights are needed for this pipeline check.
 
-The missing integration is: external codec setup/training, causal latent
-sequence preparation, time-conditioned prediction, decoding against original
-test pixels, fixed-test visualization and the image-experiment FVD protocol.
-Whole-trajectory smoothing and forward differences from older preprocessing
-must not leak future targets into conditioning inputs. These steps require
-verification before claiming reproduction of the paper's image experiment.
+This baseline does not import or implement GPE. The paper-specific GPE training
+recipe, compatible external checkpoint/interface integration and Acrobot FVD
+protocol still require verification. The local legacy latent scripts use
+precomputed trajectories and are not included in the release. Whole-trajectory
+smoothing and forward differences from older preprocessing must not leak future
+targets into conditioning inputs; the independent baseline uses neither.

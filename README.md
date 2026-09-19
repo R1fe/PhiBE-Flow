@@ -21,7 +21,7 @@ as evidence that paper results have been reproduced.
 | Acrobot angles | Implemented; direct state prediction | Demo and supplied noisy-RK45 recipe included; paper settings need verification |
 | NSE | Implemented; conditioned image-space U-Net | Zenodo downloads identified; schema, checksums and protocol verification pending |
 | KTH | Implemented; frozen VQ-VAE + time-conditioned Transformer | Public video/codec download and conversion commands included |
-| Acrobot frames | Dataset loader and external-codec interface only | Raw-image train/eval integration remains incomplete; see EXTERNAL_CODECS.md |
+| Acrobot frames | From-scratch image codec + PhiBE latent train/test | No pretrained weights needed for the pipeline baseline; not the paper's GPE experiment |
 
 No separate validation split is created. Acrobot splits trajectories, NSE splits
 sorted whole files, and KTH splits whole videos 80:20. Small datasets are rounded
@@ -79,6 +79,49 @@ For an existing original benchmark, put the trusted dataset at
 `data/acrobot_angles/acrobot_data.pkl` and omit `--data`. Publishing those
 historical files is not necessary if the released generation recipe and
 experimental parameters suffice to reproduce the reported results.
+
+## Acrobot Images: From-Scratch Pipeline
+
+No GPE source or pretrained checkpoint is required for this **pipeline baseline**.
+Place frame trajectories at `data/acrobot_frames/traj_000/frame_000.png`, etc.
+Use at least two trajectories; five trajectories give exactly four train and
+one test trajectory. No test frames are used to optimize the codec or predictor.
+
+```bash
+python scripts/check_setup.py --config configs/smoke/acrobot_frames.yaml
+python scripts/train.py --config configs/smoke/acrobot_frames.yaml
+python scripts/eval.py --config configs/smoke/acrobot_frames.yaml
+```
+
+Use `--data path/to/frames` on all three commands for an existing image folder.
+The smoke config uses the first 24 frames of each trajectory, two conditioning
+frames, six autoregressive future frames, three codec epochs and three predictor
+epochs. It tests wiring, not convergence. Results are stored under
+`experiments/acrobot_frames_smoke/`. The full-data entry uses
+`configs/acrobot_frames.yaml` instead (default one future frame).
+
+Training first fits an independent small MLP autoencoder using training images
+only. It then freezes that codec and trains `v(z_history, t)` using the existing
+PhiBE velocity loss, including the full spatial Jacobian when
+`training.include_diffusion: true`. Rollout advances both latent state and time;
+future images are targets, never rollout inputs. This is **not** GPE training
+or a claim to reproduce the paper's image experiment.
+
+- `dataset.prediction_horizon` selects the number of predicted frames.
+- `evaluation.horizons` selects exact-step and prefix-average MSE/PSNR/SSIM.
+- `training.codec_epochs` controls codec pretraining; `--epochs` controls predictor epochs.
+- Fixed test windows are chosen before any training and reused for every epoch's
+  labeled GIF/rollout PNG. Split and sample manifests are saved in `results/`.
+- `last.pt` includes both codec and predictor. Evaluation loads this newly trained
+  checkpoint; it does not need a separately downloaded pretrained model.
+- To inspect without updates, set `training.checkpoint_path` to your checkpoint
+  and `training.load_weights_only: true`. Codec pretraining is skipped, all model
+  parameters remain unchanged, and `frozen_epoch_*.pt` does not overwrite `last.pt`.
+
+Logs include per-stage timers, codec reconstruction error and a last-frame-copy
+baseline. Pixel metrics exclude conditioning frames and use pixels in [0,1].
+Acrobot FVD remains unimplemented for this baseline; enabling it fails explicitly.
+See [EXTERNAL_CODECS.md](EXTERNAL_CODECS.md) for the separate GPE dependency.
 
 ## KTH: Download, Prepare, Train, Test
 

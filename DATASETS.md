@@ -96,8 +96,8 @@ See FVD.md for the server's download reference and protocol. The OneDrive
 state-dictionary link is not a drop-in substitute for TorchScript.
 
 Acrobot frame loading accepts `trajectory_name/frame_000.png`, uses grayscale
-GPE preprocessing and provides image/pair/window/trajectory modes. It does not
-provide end-to-end raw-frame GPE training. Do not advertise that branch as a
-supported paper experiment until the missing model/weight pipeline is supplied.
+grayscale preprocessing and provides image/pair/window/trajectory modes.
+The unified from-scratch image baseline trains its own lightweight codec and
+needs no pretrained weights. It is not GPE training or paper reproduction.
 GPE code and weights are not bundled; see EXTERNAL_CODECS.md for the upstream
 link, reader-supplied interface and the precise remaining integration work.
