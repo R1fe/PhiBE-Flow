@@ -3,10 +3,9 @@
 from pathlib import Path
 
 ROOT_FILES = (
-    "README.md", "DATASETS.md", "REPRODUCIBILITY.md", "RELEASE_CHECKLIST.md",
-    "THIRD_PARTY_NOTICES.md", "LICENSE_STATUS.md", "requirements.txt",
+    "README.md", "DATASETS.md", "THIRD_PARTY_NOTICES.md", "requirements.txt",
     "environment.yml", "assets.json", ".gitignore", ".gitattributes", "FVD.md",
-    "EXTERNAL_CODECS.md", "CODE_GUIDE.md", "requirements-gpe.txt",
+    "EXTERNAL_CODECS.md", "requirements-gpe.txt",
 )
 SCRIPT_FILES = (
     "train.py", "eval.py", "download_assets.py", "prepare_kth.py", "prepare_nse.py",

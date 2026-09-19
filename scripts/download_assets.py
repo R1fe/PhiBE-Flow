@@ -31,7 +31,7 @@ def main():
         return
     asset = json.loads((ROOT / "assets.json").read_text(encoding="utf-8"))["assets"][args.asset]
     if not asset["url"]:
-        parser.error(f"Asset is not public yet: {args.asset} ({asset['status']}). See RELEASE_CHECKLIST.md.")
+        parser.error(f"Automatic download unavailable: {args.asset} ({asset['status']}). See DATASETS.md.")
     print(f"Downloading {args.asset} (large file; please wait)...", flush=True)
     digest = download_file(asset["url"], ROOT / asset["destination"], asset["sha256"])
     print(f"Verified SHA-256: {digest}")
