@@ -1,0 +1,63 @@
+project:
+  name: video-gen-with-phibe
+  dataset: nse
+
+dataset:
+  name: nse
+  dataset_path: data/nse
+  train_ratio: 0.8
+  test_ratio: 0.2
+  batch_size: 128
+  num_workers: 0
+  lo_size: 64
+  hi_size: 64
+  time_lag: 2
+  # Frame i has model time time_origin + i * training.time_delta / time_lag.
+  time_origin: 0.0
+  subsampling_ratio: 1.0
+  center_data: false
+  # Value used in NSE/forecasting_new. Set to "auto" to recompute from train files.
+  normalization: 3.0679163932800293
+
+model:
+  name: nse_drift_unet
+  in_channels: 2
+  out_channels: 1
+  channels: 128
+  dim_mults: [1, 2, 2, 2]
+  resnet_block_groups: 8
+  learned_sinusoidal_cond: true
+  random_fourier_features: false
+  learned_sinusoidal_dim: 32
+  attention_dim_head: 64
+  attention_heads: 4
+
+training:
+  seed: 42
+  epochs: 100
+  lr: 0.0002
+  # forecasting_new uses AdamW's default weight decay.
+  weight_decay: 0.01
+  time_delta: 1.0
+  max_grad_norm: 1.0
+  device: auto
+  checkpoint_path: null
+  # true means load checkpoint and run train/test/visualization without updating weights.
+  load_weights_only: false
+
+visualization:
+  enabled: true
+  every_n_epochs: 1
+  num_fixed_test_samples: 3
+  rollout_steps: 6
+  rollout_plot_frames: 8
+
+paths:
+  experiment_root: experiments/nse
+  checkpoint_dir: experiments/nse/checkpoints
+  log_dir: experiments/nse/logs
+  result_dir: experiments/nse/results
+  figure_dir: experiments/nse/figures
+
+evaluation:
+  checkpoint: last.pt

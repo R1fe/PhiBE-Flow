@@ -1,0 +1,27 @@
+project:
+  name: video-gen-with-phibe
+  dataset: acrobot_frames
+
+dataset:
+  name: acrobot_frames
+  dataset_path: data/acrobot_frames
+  mode: window # image, pair, window, trajectory
+  image_size: 32
+  normalize: true # GPE expects [-1, 1]; false gives [0, 1].
+  seq_length: 2
+  prediction_horizon: 1
+  time_lag: 1
+  stride: 1
+  time_delta: 1.0 # Time per raw frame; default unit is one frame.
+  time_origin: 0.0
+  max_frames: null
+  preload: false
+  train_ratio: 0.8
+  test_ratio: 0.2
+  seed: 42
+  batch_size: 32
+  num_workers: 0
+
+notes:
+  status: dataset_ready
+  comment: Dataset configuration only; unified frame-model training is not connected yet.

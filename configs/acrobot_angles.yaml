@@ -1,0 +1,47 @@
+project:
+  name: video-gen-with-phibe
+  dataset: acrobot_angles
+
+dataset:
+  name: acrobot_angles
+  dataset_path: data/acrobot_angles/acrobot_data.pkl
+  seq_length: 1
+  transform_angles: false
+  train_ratio: 0.8
+  test_ratio: 0.2
+  batch_size: 240
+  num_workers: 4
+
+model:
+  name: predictor
+  hidden_dims: [128, 256]
+  num_res_blocks: 2
+  res_block_dim: 256
+  activation: relu
+
+training:
+  seed: 42
+  epochs: 50
+  lr: 0.0001
+  weight_decay: 1.0e-5
+  time_delta: 0.03333
+  device: auto
+  log_every: 1
+  checkpoint_path: null
+  load_weights_only: false
+
+visualization:
+  enabled: true
+  every_n_epochs: 1
+  num_fixed_test_samples: 3
+  rollout_steps: null
+
+paths:
+  experiment_root: experiments/acrobot_angles
+  checkpoint_dir: experiments/acrobot_angles/checkpoints
+  log_dir: experiments/acrobot_angles/logs
+  result_dir: experiments/acrobot_angles/results
+  figure_dir: experiments/acrobot_angles/figures
+
+evaluation:
+  checkpoint: last.pt

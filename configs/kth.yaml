@@ -1,0 +1,73 @@
+project:
+  name: video-gen-with-phibe
+  dataset: kth
+
+dataset:
+  name: kth
+  # Recursively discovers .hdf5/.h5 shards, including source train/val directories.
+  # Re-split pooled videos 8:2; this is NOT the original official KTH split.
+  dataset_path: data/kth
+  train_ratio: 0.8
+  test_ratio: 0.2
+  batch_size: 128
+  num_workers: 0
+  image_size: 64
+  condition_frames: 10
+  prediction_frames: 30
+  frame_stride: 1
+  # t = time_origin + original_frame_index * frame_time_delta.
+  # Frame units (dt=1) reproduce the source objective/integration scaling.
+  frame_time_delta: 1.0
+  time_origin: 0.0
+  horizontal_flip: false
+
+vqvae:
+  checkpoint_path: data/kth/vqvae.ckpt
+  chunk_size: 32
+
+model:
+  state_size: 4
+  state_res: [8, 8]
+  inner_dim: 768
+  depth: 4
+  mid_depth: 5
+  heads: 8
+  dropout: 0.05
+  time_scale: 1.0
+
+training:
+  seed: 0
+  epochs: 1000000000
+  max_steps: 400000
+  lr: 0.0002
+  weight_decay: 0.0
+  warmup_steps: 10000
+  max_grad_norm: 1.0
+  include_diffusion: true
+  ema_start_step: 10000
+  ema_decay: 0.9999
+  device: auto
+  checkpoint_path: null
+  # true: requires a migrated time-conditioned checkpoint; no optimizer/EMA updates.
+  load_weights_only: false
+
+visualization:
+  enabled: true
+  every_n_epochs: 1
+  num_fixed_test_samples: 3
+  rollout_plot_frames: 10
+  fps: 10
+
+evaluation:
+  checkpoint: last.pt
+  use_ema: false
+  # Both metrics at step h and averaged over steps 1..h are written.
+  horizons: [5, 10, 20, 30]
+  fvd: false
+  i3d_checkpoint: data/kth/i3d_torchscript.pt
+
+paths:
+  checkpoint_dir: experiments/kth/checkpoints
+  log_dir: experiments/kth/logs
+  result_dir: experiments/kth/results
+  figure_dir: experiments/kth/figures
