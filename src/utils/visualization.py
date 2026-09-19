@@ -452,7 +452,8 @@ def compute_joint_positions(state: np.ndarray) -> tuple[float, float, float, flo
 
 
 def save_video_rollout_comparison(ground_truth, generated, times, output_stem,
-                                  condition_frames=10, max_frames=10, fps=10.0):
+                                  condition_frames=10, max_frames=10, fps=10.0,
+                                  title="KTH Rollout Comparison"):
     """Save an animated side-by-side GIF and a two-row rollout PNG."""
     from PIL import Image, ImageDraw
 
@@ -462,6 +463,9 @@ def save_video_rollout_comparison(ground_truth, generated, times, output_stem,
         raise ValueError("Visualization fps and max_frames must be positive.")
     output_stem = Path(output_stem)
     output_stem.parent.mkdir(parents=True, exist_ok=True)
+    if ground_truth.shape[1] == 1:
+        ground_truth = ground_truth.repeat(1, 3, 1, 1)
+        generated = generated.repeat(1, 3, 1, 1)
     truth = ((ground_truth.detach().cpu().clamp(-1, 1) + 1) * 127.5).byte().permute(0, 2, 3, 1).numpy()
     pred = ((generated.detach().cpu().clamp(-1, 1) + 1) * 127.5).byte().permute(0, 2, 3, 1).numpy()
     panels = []
@@ -493,7 +497,7 @@ def save_video_rollout_comparison(ground_truth, generated, times, output_stem,
             axis.set_yticks([])
     axes[0, 0].set_ylabel("Ground Truth")
     axes[1, 0].set_ylabel("Generated")
-    fig.suptitle("KTH Rollout Comparison")
+    fig.suptitle(title)
     fig.tight_layout()
     fig.savefig(output_stem.with_suffix(".png"), dpi=150)
     plt.close(fig)
