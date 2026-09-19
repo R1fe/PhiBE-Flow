@@ -84,10 +84,11 @@ def _run_kth(config, args, device, project_root, evaluation=False):
         trainer.load(checkpoint, resume=False)
         detector = None
         if bool(config.evaluation.fvd):
+            from src.utils.fvd import load_fvd_detector, SERVER_I3D_SHA256
+
             i3d_path = resolve_path(project_root, config.evaluation.i3d_checkpoint)
-            if not i3d_path.is_file():
-                raise FileNotFoundError(f"FVD requires local I3D weights: {i3d_path}")
-            detector = torch.jit.load(str(i3d_path), map_location=device).eval()
+            detector, detector_sha256 = load_fvd_detector(
+                i3d_path, device, config.evaluation.get("i3d_sha256", SERVER_I3D_SHA256))
         trainer._sync()
         start = perf_counter()
         use_ema = bool(config.evaluation.use_ema)
@@ -95,6 +96,16 @@ def _run_kth(config, args, device, project_root, evaluation=False):
         trainer._sync()
         metrics["evaluation_seconds"] = perf_counter()-start
         metrics["use_ema"] = use_ema
+        if detector is not None:
+            metrics["fvd_protocol"] = {
+                "backend": "torchscript_i3d",
+                "i3d_sha256": detector_sha256,
+                "condition_frames": trainer.condition_frames,
+                "prediction_frames": int(config.dataset.prediction_frames),
+                "reference": "original_pixels",
+                "includes_conditioning": True,
+                "resize": "bilinear_224_align_corners_false",
+            }
         (trainer.result_dir / "eval_metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
         trainer.visualize(samples, "evaluation_ema" if use_ema else "evaluation", use_ema=use_ema)
         logger.info("KTH test metrics: %s", metrics)
