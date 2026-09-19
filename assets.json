@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "assets": {
+    "kth_vqvae": {
+      "url": "https://huggingface.co/cvg-unibe/river_kth_64/resolve/main/vqvae.ckpt",
+      "sha256": "dd3c614d100181b0c3fe5c31675763a9340b448cfbcd1b3650bc9b1fb566a04f",
+      "destination": "data/kth/vqvae.ckpt",
+      "source": "https://huggingface.co/cvg-unibe/river_kth_64/blob/main/vqvae.ckpt",
+      "license": "GPL-3.0 (upstream model card); also observe KTH data terms",
+      "status": "available"
+    },
+    "nse_dataset": {
+      "url": null,
+      "sha256": null,
+      "destination": "data/nse",
+      "status": "pending_public_dataset_and_simulation_metadata"
+    },
+    "acrobot_benchmark": {
+      "url": null,
+      "sha256": null,
+      "destination": "data/acrobot_angles/acrobot_data.pkl",
+      "status": "pending_public_benchmark_or_exact_generation_recipe"
+    }
+  }
+}
