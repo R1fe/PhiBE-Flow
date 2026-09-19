@@ -4,10 +4,34 @@ Preprocessing follows the FVD helper credited to fvd-comparison;
 Frechet statistics follow its StyleGAN-V implementation.
 """
 
+import hashlib
+from pathlib import Path
+
 import numpy as np
 from scipy.linalg import sqrtm
 import torch
 from torch.nn import functional as F
+
+
+SERVER_I3D_SHA256 = "bec6519f66ea534e953026b4ae2c65553c17bf105611c746d904657e5860a5e2"
+
+
+def load_fvd_detector(path, device, expected_sha256=SERVER_I3D_SHA256):
+    """Verify a reader-downloaded detector before loading executable TorchScript."""
+    path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"FVD requires local I3D weights: {path}. See FVD.md.")
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    actual = digest.hexdigest()
+    if not expected_sha256 or actual != expected_sha256.lower():
+        raise ValueError("I3D SHA-256 mismatch. Use the trusted detector documented in FVD.md.")
+    detector = torch.jit.load(str(path), map_location=device).eval()
+    for parameter in detector.parameters():
+        parameter.requires_grad_(False)
+    return detector, actual
 
 
 @torch.no_grad()
