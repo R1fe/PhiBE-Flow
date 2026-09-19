@@ -65,6 +65,7 @@ evaluation:
   horizons: [5, 10, 20, 30]
   fvd: false
   i3d_checkpoint: data/kth/i3d_torchscript.pt
+  i3d_sha256: bec6519f66ea534e953026b4ae2c65553c17bf105611c746d904657e5860a5e2
 
 paths:
   checkpoint_dir: experiments/kth/checkpoints
