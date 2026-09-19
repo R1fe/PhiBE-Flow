@@ -45,8 +45,15 @@ def check(config, root=ROOT, load_codec=False):
         report.update(train_trajectories=len(train.trajectory_names),
                       test_trajectories=len(test.trajectory_names),
                       sample_shape=list(context.shape), future_shape=list(future.shape),
-                      pretrained_weights_required=False)
-        report["warnings"].append("From-scratch image baseline, not the paper's external GPE codec.")
+                      codec_type=config.get("codec", {}).get("type", "mlp"))
+        if load_codec:
+            from src.models.external_codec import build_image_codec
+            codec, identity, needs_training = build_image_codec(config, root, torch.device("cpu"))
+            with torch.no_grad():
+                reconstructed = codec(context)
+            report.update(codec_identity=identity, reconstruction_shape=list(reconstructed.shape),
+                          needs_reconstruction_pretraining=needs_training)
+        report["warnings"].append("External source/weights require compatible architecture and independent provenance checks.")
     elif data.name == "nse":
         from src.datasets.nse import resolve_nse_files, split_nse_files, load_nse_tensor
         files = resolve_nse_files(path)
@@ -97,7 +104,7 @@ def check(config, root=ROOT, load_codec=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True)
-    parser.add_argument("--load-codec", action="store_true", help="Also load the real KTH codec and reconstruct one frame.")
+    parser.add_argument("--load-codec", action="store_true", help="Also load the selected KTH/Acrobot codec and check reconstruction.")
     add_runtime_arguments(parser)
     args = parser.parse_args()
     config = apply_runtime_arguments(load_config(resolve_path(ROOT, args.config)), args)

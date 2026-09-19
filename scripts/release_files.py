@@ -6,7 +6,7 @@ ROOT_FILES = (
     "README.md", "DATASETS.md", "REPRODUCIBILITY.md", "RELEASE_CHECKLIST.md",
     "THIRD_PARTY_NOTICES.md", "LICENSE_STATUS.md", "requirements.txt",
     "environment.yml", "assets.json", ".gitignore", ".gitattributes", "FVD.md",
-    "EXTERNAL_CODECS.md",
+    "EXTERNAL_CODECS.md", "CODE_GUIDE.md", "requirements-gpe.txt",
 )
 SCRIPT_FILES = (
     "train.py", "eval.py", "download_assets.py", "prepare_kth.py", "prepare_nse.py",
@@ -14,7 +14,7 @@ SCRIPT_FILES = (
     "release_files.py", "overfit_nse.py", "generate_acrobot_benchmark.py",
 )
 CONFIG_FILES = ("acrobot_angles.yaml", "acrobot_frames.yaml", "nse.yaml", "kth.yaml",
-                "smoke/kth.yaml", "smoke/acrobot_frames.yaml")
+                "smoke/kth.yaml", "smoke/acrobot_frames.yaml", "acrobot_frames_gpe.yaml")
 
 
 def release_files(root):
