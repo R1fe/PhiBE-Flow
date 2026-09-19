@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 from src.datasets.acrobot_frames import build_acrobot_frame_datasets
 from src.method.loss import velocity_loss
 from src.models.acrobot_frame_model import AcrobotFrameModel
+from src.models.external_codec import build_image_codec
 from src.utils.config import resolve_path
 from src.utils.logger import build_logger
 from src.utils.metrics import kth_frame_metrics
@@ -18,7 +19,7 @@ from src.utils.visualization import save_video_rollout_comparison
 
 
 class AcrobotFrameTrainer:
-    def __init__(self, config, device, root):
+    def __init__(self, config, device, root, restoring=False):
         self.config, self.device = config, device
         d, m = config.dataset, config.model
         if d.mode != "window" or not d.normalize:
@@ -32,7 +33,9 @@ class AcrobotFrameTrainer:
         self.signature = dict(image_size=d.image_size, seq_length=d.seq_length,
                               latent_dim=m.latent_dim, width=m.width, time_scale=m.time_scale,
                               dt=self.dt, time_origin=d.time_origin)
-        self.model = AcrobotFrameModel(d.image_size, d.seq_length, **dict(m)).to(device)
+        codec, identity, self.needs_codec_training = build_image_codec(config, root, device, restoring)
+        self.signature["codec"] = identity
+        self.model = AcrobotFrameModel(d.image_size, d.seq_length, codec=codec, **dict(m)).to(device)
         self.optimizer = torch.optim.Adam(self.model.velocity.parameters(), lr=config.training.lr)
         self.update_parameters = not config.training.load_weights_only
         self.epoch = 0
@@ -51,14 +54,16 @@ class AcrobotFrameTrainer:
             parameter.requires_grad_(False)
 
     def save(self, name, split):
-        torch.save(dict(format="acrobot_image_baseline_v1", model=self.model.state_dict(),
+        torch.save(dict(format="acrobot_image_pipeline_v2", model=self.model.state_dict(),
                         optimizer=self.optimizer.state_dict(), epoch=self.epoch,
                         signature=self.signature, split=split), self.dirs["checkpoint_dir"] / name)
 
     def load(self, path, split):
         payload = torch.load(path, map_location=self.device)
-        if payload.get("format") != "acrobot_image_baseline_v1":
-            raise ValueError("Expected a from-scratch Acrobot image baseline checkpoint, not GPE weights.")
+        if payload.get("format") not in {"acrobot_image_baseline_v1", "acrobot_image_pipeline_v2"}:
+            raise ValueError("Expected a unified image-pipeline checkpoint; configure raw GPE weights under codec instead.")
+        if payload["format"] == "acrobot_image_baseline_v1":
+            payload["signature"].setdefault("codec", {"type": "mlp"})
         if payload["signature"] != self.signature or payload["split"] != split:
             raise ValueError("Checkpoint architecture/time grid or train/test trajectory split differs.")
         self.model.load_state_dict(payload["model"], strict=True)
@@ -164,11 +169,11 @@ def run_acrobot_frames(config, args, device, project_root, evaluation=False):
         kwargs = dict(batch_size=config.dataset.batch_size, num_workers=config.dataset.num_workers)
         train_loader = DataLoader(train, shuffle=True, **kwargs)
         test_loader = DataLoader(test, shuffle=False, **kwargs)
-        trainer = AcrobotFrameTrainer(config, device, project_root)
-        split = dict(train=train.trajectory_names, test=test.trajectory_names)
         checkpoint = config.training.checkpoint_path
         if evaluation:
             checkpoint = getattr(args, "checkpoint", None) or config.evaluation.checkpoint
+        trainer = AcrobotFrameTrainer(config, device, project_root, restoring=bool(checkpoint))
+        split = dict(train=train.trajectory_names, test=test.trajectory_names)
         if checkpoint:
             if evaluation and not getattr(args, "checkpoint", None):
                 path = trainer.dirs["checkpoint_dir"] / checkpoint
@@ -195,6 +200,7 @@ def run_acrobot_frames(config, args, device, project_root, evaluation=False):
             metrics = trainer.evaluate(test_loader)
             trainer.sync()
             metrics["evaluation_seconds"] = perf_counter()-start
+            metrics["codec_identity"] = trainer.signature["codec"]
             (result_dir / "eval_metrics.json").write_text(json.dumps(metrics, indent=2))
             trainer.visualize(samples, "evaluation")
             trainer.logger.info("Image test %s", metrics)
@@ -203,8 +209,16 @@ def run_acrobot_frames(config, args, device, project_root, evaluation=False):
         if epochs < 1:
             raise ValueError("epochs must be positive.")
         if not checkpoint:
-            trainer.pretrain_codec(train_loader)
+            if trainer.needs_codec_training:
+                trainer.logger.info("Codec initialization uses train-only reconstruction, not the GPE geometry objective.")
+                trainer.pretrain_codec(train_loader)
+            else:
+                trainer.freeze_codec()
             trainer.save("codec_initialized.pt", split)
+        (result_dir / "codec_info.json").write_text(json.dumps(dict(
+            identity=trainer.signature["codec"],
+            initialization=config.get("codec", {}).get("initialization", "random"),
+            reconstruction_pretraining=not bool(checkpoint) and trainer.needs_codec_training), indent=2))
         history = []
         for _ in range(epochs):
             trainer.epoch += 1
