@@ -42,9 +42,9 @@ class FrameLatentVelocity(nn.Module):
 
 
 class AcrobotFrameModel(nn.Module):
-    def __init__(self, image_size=32, seq_length=2, latent_dim=8, width=128, time_scale=30.0):
+    def __init__(self, image_size=32, seq_length=2, latent_dim=8, width=128, time_scale=30.0, codec=None):
         super().__init__()
-        self.codec = FrameAutoencoder(image_size, latent_dim, width)
+        self.codec = codec if codec is not None else FrameAutoencoder(image_size, latent_dim, width)
         self.velocity = FrameLatentVelocity(seq_length, latent_dim, width, time_scale)
 
     def encode_sequence(self, frames):
