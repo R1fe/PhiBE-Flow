@@ -4,8 +4,13 @@ Anonymous source artifact for state-space, image-space and latent-space
 forecasting with explicit time-dependent velocity fields.
 
 **Release status: prepared source draft, not yet a complete benchmark release.**
-NSE and the original Acrobot benchmark still need public assets/metadata, and
-project-wide licensing and venue-specific anonymity checks remain pending.
+**GPE is not bundled:** obtain it separately from its upstream repository and
+follow its terms; see [EXTERNAL_CODECS.md](EXTERNAL_CODECS.md). Previously copied
+encoder/decoder definitions have been removed from the current tree, but old
+Git history must also be addressed before distribution. See LICENSE_STATUS.md.
+NSE downloads are identified and an original-style Acrobot generator is
+included, but data/protocol verification, project licensing and final
+ICLR 2027 anonymity checks remain pending.
 See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). Do not interpret smoke tests
 as evidence that paper results have been reproduced.
 
@@ -13,10 +18,10 @@ as evidence that paper results have been reproduced.
 
 | Dataset | Train / test | Data readiness |
 | --- | --- | --- |
-| Acrobot angles | Implemented; direct state prediction | Deterministic demo generator included; original benchmark download pending |
-| NSE | Implemented; conditioned image-space U-Net | Requires external simulation shards; exact public benchmark pending |
+| Acrobot angles | Implemented; direct state prediction | Demo and supplied noisy-RK45 recipe included; paper settings need verification |
+| NSE | Implemented; conditioned image-space U-Net | Zenodo downloads identified; schema, checksums and protocol verification pending |
 | KTH | Implemented; frozen VQ-VAE + time-conditioned Transformer | Public video/codec download and conversion commands included |
-| Acrobot frames | Dataset loader only | Unified GPE image training/evaluation is not implemented |
+| Acrobot frames | Dataset loader and external-codec interface only | Raw-image train/eval integration remains incomplete; see EXTERNAL_CODECS.md |
 
 No separate validation split is created. Acrobot splits trajectories, NSE splits
 sorted whole files, and KTH splits whole videos 80:20. Small datasets are rounded
@@ -65,9 +70,15 @@ python scripts/train.py --config configs/acrobot_angles.yaml --data data/acrobot
 python scripts/eval.py --config configs/acrobot_angles.yaml --data data/acrobot_angles/demo.npz --batch-size 32 --num-workers 0
 ```
 
-For the original benchmark, put the trusted published dataset at
-`data/acrobot_angles/acrobot_data.pkl` and omit `--data`. Its public download
-has not yet been supplied; the release checklist records this blocker.
+The supplied stochastic generator recipe is now available as
+`python scripts/generate_acrobot_benchmark.py`; see DATASETS.md for its
+nonstandard noisy-RK45 behavior and the required `8/239` default time interval.
+It generates a new seeded dataset, not verified historical paper trajectories.
+
+For an existing original benchmark, put the trusted dataset at
+`data/acrobot_angles/acrobot_data.pkl` and omit `--data`. Publishing those
+historical files is not necessary if the released generation recipe and
+experimental parameters suffice to reproduce the reported results.
 
 ## KTH: Download, Prepare, Train, Test
 
@@ -103,8 +114,10 @@ reproducing a specific experiment.
 
 ## NSE: Bring Simulation Shards
 
-The exact simulation data and generation parameters must be released before
-this benchmark is independently reproducible. Once available:
+The source data page is https://zenodo.org/records/10939479 (five PT files,
+about 26.2 GB). See DATASETS.md for citation, licensing and a duplicate-file
+checksum warning. The data schema and exact simulation metadata must be checked before
+claiming this benchmark is independently reproducible. After downloading:
 
 1. Put trusted `.pt` files with shape `[N,T,H,W]` into a temporary input directory.
 2. Convert to float32 `.npy` shards for memory-mapped loading, or use `.pt` directly
@@ -139,7 +152,10 @@ belongs to the original experiment, not arbitrary downloaded NSE data.
 | `evaluation.checkpoint: last.pt` | Evaluate final weights without selecting on test performance |
 
 KTH supports exact spatial VJP loss, EMA, resume, per-stage timers and optional
-FVD. Enable FVD only after supplying the separate local I3D detector.
+FVD execution. The paper reports FVD, so validating that protocol is required
+for paper reproduction. See [FVD.md](FVD.md) for reader-managed downloads and
+the unresolved Google TensorFlow / OneDrive / TorchScript distinction.
+Enable FVD only after supplying the separate compatible local I3D detector.
 Acrobot/NSE checkpoint loading is a warm start, not exact RNG/scheduler resume.
 Legacy velocity checkpoints without time conditioning are not interchangeable.
 

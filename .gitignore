@@ -20,6 +20,8 @@ build/
 *.pt
 *.pth
 *.ckpt
+*.ts
+external/
 *.hdf5
 *.h5
 *.npy
