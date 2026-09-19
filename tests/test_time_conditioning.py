@@ -18,7 +18,7 @@ from src.datasets.acrobot_angles import AcrobotAnglesDataset
 from src.datasets.latent import LatentRolloutDataset
 from src.datasets.nse import NSEForecastDataset
 from src.method.loss import compute_full_jacobian, nse_velocity_loss, velocity_loss
-from src.models.gpe import LatentResidualDynamics
+from src.models.latent_dynamics import LatentResidualDynamics
 from src.models.nse_predictor import NSEDriftModel
 from src.models.predictor import build_predictor
 from src.trainers.latent_trainer import LatentTrainer
