@@ -1,0 +1,62 @@
+# Reduced predictor for pipeline checks with the real pretrained image codec.
+# These settings are NOT a benchmark configuration.
+project:
+  name: anonymous-forecasting
+  dataset: kth
+dataset:
+  name: kth
+  dataset_path: data/kth
+  train_ratio: 0.8
+  test_ratio: 0.2
+  batch_size: 1
+  num_workers: 0
+  image_size: 64
+  condition_frames: 2
+  prediction_frames: 2
+  frame_stride: 1
+  frame_time_delta: 1.0
+  time_origin: 0.0
+  horizontal_flip: false
+vqvae:
+  checkpoint_path: data/kth/vqvae.ckpt
+  chunk_size: 1
+model:
+  state_size: 4
+  state_res: [8, 8]
+  inner_dim: 32
+  depth: 1
+  mid_depth: 1
+  heads: 4
+  dropout: 0.0
+  time_scale: 1.0
+training:
+  seed: 0
+  epochs: 1
+  max_steps: 1
+  lr: 0.0002
+  weight_decay: 0.0
+  warmup_steps: 0
+  max_grad_norm: 1.0
+  include_diffusion: true
+  ema_start_step: 0
+  ema_decay: 0.9999
+  device: cpu
+  checkpoint_path: null
+  load_weights_only: false
+visualization:
+  enabled: true
+  every_n_epochs: 1
+  num_fixed_test_samples: 1
+  rollout_plot_frames: 4
+  fps: 10
+evaluation:
+  checkpoint: last.pt
+  use_ema: false
+  horizons: [1, 2]
+  fvd: false
+  i3d_checkpoint: data/kth/i3d_torchscript.pt
+paths:
+  checkpoint_dir: experiments/kth_smoke/checkpoints
+  log_dir: experiments/kth_smoke/logs
+  result_dir: experiments/kth_smoke/results
+  figure_dir: experiments/kth_smoke/figures
