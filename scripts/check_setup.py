@@ -38,6 +38,15 @@ def check(config, root=ROOT, load_codec=False):
                 raise ValueError("Acrobot timestamps disagree with training.time_delta.")
         dataset = AcrobotAnglesDataset([r for _, r in train], int(data.seq_length), bool(data.transform_angles))
         report.update(train_trajectories=len(train), test_trajectories=len(test), sample_shape=list(dataset[0][0].shape))
+    elif data.name == "acrobot_frames":
+        from src.datasets.acrobot_frames import build_acrobot_frame_datasets
+        train, test = build_acrobot_frame_datasets(config, root)
+        context, future, time = test[0]
+        report.update(train_trajectories=len(train.trajectory_names),
+                      test_trajectories=len(test.trajectory_names),
+                      sample_shape=list(context.shape), future_shape=list(future.shape),
+                      pretrained_weights_required=False)
+        report["warnings"].append("From-scratch image baseline, not the paper's external GPE codec.")
     elif data.name == "nse":
         from src.datasets.nse import resolve_nse_files, split_nse_files, load_nse_tensor
         files = resolve_nse_files(path)

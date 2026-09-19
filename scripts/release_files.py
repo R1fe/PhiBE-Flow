@@ -13,7 +13,8 @@ SCRIPT_FILES = (
     "generate_acrobot.py", "check_setup.py", "audit_release.py", "export_release.py",
     "release_files.py", "overfit_nse.py", "generate_acrobot_benchmark.py",
 )
-CONFIG_FILES = ("acrobot_angles.yaml", "acrobot_frames.yaml", "nse.yaml", "kth.yaml", "smoke/kth.yaml")
+CONFIG_FILES = ("acrobot_angles.yaml", "acrobot_frames.yaml", "nse.yaml", "kth.yaml",
+                "smoke/kth.yaml", "smoke/acrobot_frames.yaml")
 
 
 def release_files(root):

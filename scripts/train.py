@@ -321,6 +321,11 @@ def main() -> None:
     set_seed(int(config.training.seed))
     device = build_device(config.training.device)
 
+    if config.dataset.name == "acrobot_frames":
+        from src.trainers.acrobot_frame_pipeline import run_acrobot_frames
+
+        run_acrobot_frames(config, args, device, PROJECT_ROOT)
+        return
     if config.dataset.name == "kth":
         from src.trainers.kth_pipeline import run_kth
 

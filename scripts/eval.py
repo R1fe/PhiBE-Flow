@@ -182,6 +182,11 @@ def main() -> None:
     set_seed(int(config.training.seed))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if config.training.device == "auto" else torch.device(config.training.device)
 
+    if config.dataset.name == "acrobot_frames":
+        from src.trainers.acrobot_frame_pipeline import run_acrobot_frames
+
+        run_acrobot_frames(config, args, device, PROJECT_ROOT, evaluation=True)
+        return
     if config.dataset.name == "kth":
         from src.trainers.kth_pipeline import run_kth
 
