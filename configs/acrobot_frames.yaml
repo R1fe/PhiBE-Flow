@@ -22,6 +22,17 @@ dataset:
   batch_size: 32
   num_workers: 0
 
+codec:
+  type: mlp # mlp, gpe, torchscript
+  initialization: random # random: train reconstruction; pretrained: freeze supplied codec
+  trust_external_code: false
+  source_dir: external/GPE_codes
+  source_file: transportmodules/transportsMNIST.py
+  encoder_class: TransportT
+  decoder_class: TransportG
+  encoder_checkpoint: null
+  decoder_checkpoint: null
+
 model:
   latent_dim: 8
   width: 128
