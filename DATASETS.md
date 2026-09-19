@@ -1,105 +1,77 @@
-# Data and Model Assets
+# Data Formats
 
-Data are not included in the source ZIP. Review upstream usage terms before
-downloading. Use only trusted pickle/checkpoint files; SHA-256 detects changes
-but does not make an unknown pickle safe.
+Data and weights are not bundled. Review source terms and load only trusted
+pickle/checkpoint inputs.
 
 ## Acrobot Angles
 
-The default benchmark input is a pickle containing a list of dictionaries:
-`t` is an increasing array `[T]`; `y` is `[4,T]` containing two angles and two
-angular velocities. Uniform frame spacing must match `training.time_delta`.
-The supplied original recipe can be run with
-`python scripts/generate_acrobot_benchmark.py`. Its defaults are 10,000
-trajectories, duration 8, fps argument 30 and noise 0.5. A new explicit seed is
-recorded; the original source did not seed its RNG, so this is not a promise of
-bitwise reproduction of historical paper data. Pass the output via
-`--data data/acrobot_angles/benchmark.npz` to train/eval.
+The loader accepts a pickle list of dictionaries with `t: [T]` and `y: [4,T]`
+(two angles and two angular velocities), or numeric NPZ with `t: [T]` and
+`y: [N,4,T]`. Frame spacing must match `training.time_delta`.
 
-The source adds independent Gaussian draws to all four RHS components inside
-adaptive `solve_ivp`/RK45. This is preserved for compatibility, **not** presented
-as a standard SDE solver. Changing it to Euler-Maruyama would change the data
-generation protocol and requires a separate experiment decision. The source's
-`linspace(0,8,240)` has frame interval `8/239`, **not** `1/30`; set
-`training.time_delta` accordingly and run `check_setup.py` before training.
-The numeric NPZ contains solver/library versions and RNG seed as metadata.
+- `python scripts/generate_acrobot.py` generates deterministic zero-noise demo
+  data at 30 fps, not the stochastic benchmark.
+- `python scripts/generate_acrobot_benchmark.py` generates the noisy RK45 recipe.
+  Defaults: 10,000 trajectories, duration 8, 240 saved frames, noise 0.5. Pass
+  `--data data/acrobot_angles/benchmark.npz` to train/eval and set
+  `training.time_delta: 0.03347280334728033` (`8/239`, not `1/30`).
 
-For installation checks, `generate_acrobot.py` produces a numeric NPZ with
-`t=[T]`, `y=[N,4,T]`, seed 42, no noise and 30 frames per second. It uses the
-included two-link ODE with a fixed time grid. This demo is not a substitute for
-the stochastic benchmark and must not be used to claim reproduction of it.
+The benchmark recipe draws noise inside adaptive RK45 RHS evaluations; it is
+not a standard SDE discretization. Its seed and solver metadata are recorded,
+but historical unseeded trajectories cannot be reproduced bit-for-bit.
+
+## Acrobot Frames
+
+Use one directory per trajectory:
+
+```text
+data/acrobot_frames/
+  traj_000/frame_000.png
+  traj_000/frame_001.png
+  traj_001/frame_000.png
+  ...
+```
+
+Images are converted to grayscale, resized and normalized to [-1,1]. Use at
+least two trajectories; five give an exact four-train/one-test split. Codec
+setup is documented in [EXTERNAL_CODECS.md](EXTERNAL_CODECS.md).
 
 ## NSE
 
-The supplied source is [Stochastic Navier-Stokes dataset for probabilistic
-forecasting](https://zenodo.org/records/10939479), DOI
-`10.5281/zenodo.10939479` (Mengjian Hua, 2024), licensed CC BY 4.0 on the record.
-Readers can manually download `data_file.pt`, `data_file02.pt`,
-`data_file03.pt`, `data_file04.pt` and `data_file05.pt` (about 26.2 GB total).
-The record lists identical MD5 values for the first and third files; verify
-the downloads and check for duplicates before fixing train/test membership.
-Do not silently deduplicate a paper benchmark or put duplicate trajectories
-on opposite sides of a split. Download/schema verification and fixed SHA-256
-values are still pending, so the automatic downloader remains blocked.
+Source: [Stochastic Navier-Stokes dataset for probabilistic forecasting](https://zenodo.org/records/10939479),
+DOI `10.5281/zenodo.10939479` (Mengjian Hua, 2024), CC BY 4.0.
+Download `data_file.pt`, `data_file02.pt`, `data_file03.pt`, `data_file04.pt`
+and `data_file05.pt` (approximately 26.2 GB). The first and third files have
+identical MD5 entries on the record: check for duplicates before splitting.
+Automatic downloading is disabled pending schema and SHA-256 verification.
 
-Each `.pt` shard contains `[N,T,H,W]` data, either directly, as the first tuple
-element, or under `data`, `trajectories`, `tensor` or `x`. The converted `.npy`
-format is float32 with exactly that shape and is memory-mapped on load.
-No axes are guessed or transposed automatically.
+Each PT file must contain `[N,T,H,W]`, either directly, as the first tuple
+element, or under `data`, `trajectories`, `tensor` or `x`. Converted NPY files
+are float32 with the same shape and use memory-mapped loading. Axes are not
+guessed. Do not mix original and converted copies in one directory.
 
-Publish the viscosity, forcing, domain, boundary conditions, solver, grid,
-integration step, saved-frame interval, simulation duration, initial-condition
-distribution, seeds, shard ordering and checksums with the exact data. None of
-these can safely be inferred from a directory of tensors.
-
-Default normalization is the original experiment's mean frame RMS. Set
-`dataset.normalization: auto` to compute this statistic from training shards
-only when using new data. Time belongs to the middle sampled frame:
-`t = time_origin + (window_start + time_lag) * time_delta / time_lag`.
-PT conversion loads one full file; NPY training avoids materializing the whole
-normalized dataset. Keep `num_workers: 0` for the lowest memory use on Windows.
+Splitting uses sorted whole files, so use at least two disjoint shards. Set
+`dataset.normalization: auto` for a training-only mean frame RMS estimate on
+new data. Configure sampling times consistently with the simulation; preserve
+the physical parameters, time grid, seeds, file ordering and checksums with
+the experiment. Use `num_workers: 0` for low memory use on Windows.
 
 ## KTH
 
-The [official data page](https://www.csc.kth.se/cvap/actions/) provides six AVI
-ZIP archives. It specifies non-commercial use and requests citation of Schuldt,
-Laptev and Caputo, ICPR 2004. The downloader records local checksums because
-the official archive page does not publish fixed SHA-256 values.
+The [official dataset](https://www.csc.kth.se/cvap/actions/) provides six AVI
+archives for non-commercial use and requests citation of Schuldt, Laptev and
+Caputo, ICPR 2004. The downloader records local archive hashes.
 
-`prepare_kth.py` decodes each whole AVI, converts BGR to RGB, resizes the shorter
-side to 64 using bilinear interpolation and center-crops to 64x64. HDF5 stores
-uint8 `[T,H,W,C]` arrays under numeric video IDs and lengths under `len/<id>`.
-ZIP entry paths are never used as output filesystem paths. Short clips and
-conversion provenance are reported in the companion JSON manifest.
+`prepare_kth.py` converts BGR to RGB, resizes the shorter side to 64 and
+center-crops to 64x64. HDF5 contains uint8 `[T,H,W,C]` arrays under numeric
+video IDs, with lengths under `len/<id>`. The loader also supports
+`video_id/frames` and numbered-frame groups. Pixels are mapped to [-1,1].
+Splitting is by whole video, not by official subject IDs or folder names.
 
-The loader additionally accepts `video_id/frames` stores and numbered frame
-groups. Training maps pixels to [-1,1]. A seeded video-level 80:20 split is used,
-including any shards under subdirectories; original train/val folder names do
-not preserve upstream splits. This is not a subject-disjoint official protocol.
-
-The [RIVER KTH image codec](https://huggingface.co/cvg-unibe/river_kth_64/blob/main/vqvae.ckpt)
-is `f8_small`, 64x64 RGB -> 4x8x8 continuous latent. Decoding includes vector
-quantization. Its 857703197-byte checkpoint has SHA-256:
+The [RIVER KTH codec](https://huggingface.co/cvg-unibe/river_kth_64) maps 64x64
+RGB to a 4x8x8 continuous latent; decoding includes vector quantization.
+Its checkpoint is 857,703,197 bytes with SHA-256:
 
 `dd3c614d100181b0c3fe5c31675763a9340b448cfbcd1b3650bc9b1fb566a04f`
 
-The compatibility loader ignores the stored Lightning ModelCheckpoint class
-used only by training metadata, so Lightning is not required for inference.
-This is not an untrusted-pickle sandbox.
-
-## Optional Assets and Missing Support
-
-FVD needs an external I3D TorchScript model configured with
-`evaluation.i3d_checkpoint`; it is not silently downloaded. The actual server
-detector SHA-256 is pinned in `configs/kth.yaml` and checked before loading.
-See FVD.md for the server's download reference and protocol. The OneDrive
-state-dictionary link is not a drop-in substitute for TorchScript.
-
-Acrobot frame loading accepts `trajectory_name/frame_000.png`, uses grayscale
-preprocessing and provides image/pair/window/trajectory modes.
-The unified from-scratch image baseline trains its own lightweight codec and
-needs no pretrained weights. It is not GPE training or paper reproduction.
-GPE code and weights are not bundled; see EXTERNAL_CODECS.md for the upstream
-link and the connected source/T-S checkpoint/TorchScript interfaces. Random
-external-codec reconstruction warmup is supported, but is not GPE geometric
-training. Compatible paper weights and training protocol are still reader-supplied.
+Optional I3D weights and video construction are described in [FVD.md](FVD.md).

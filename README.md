@@ -1,91 +1,51 @@
-# Time-Conditioned Forecasting
+# PhiBE-Flow
 
-Anonymous source artifact for state-space, image-space and latent-space
-forecasting with explicit time-dependent velocity fields.
+Time-conditioned forecasting with velocity fields `v(x,t)` in state, image or
+latent space.
 
-**Release status: prepared source draft, not yet a complete benchmark release.**
-**GPE is not bundled:** obtain it separately from its upstream repository and
-follow its terms; see [EXTERNAL_CODECS.md](EXTERNAL_CODECS.md). Previously copied
-encoder/decoder definitions have been removed from the current tree, but old
-Git history must also be addressed before distribution. See LICENSE_STATUS.md.
-NSE downloads are identified and an original-style Acrobot generator is
-included, but data/protocol verification, project licensing and final
-ICLR 2027 anonymity checks remain pending.
-See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). Do not interpret smoke tests
-as evidence that paper results have been reproduced.
-
-## Supported Pipelines
-
-| Dataset | Train / test | Data readiness |
-| --- | --- | --- |
-| Acrobot angles | Implemented; direct state prediction | Demo and supplied noisy-RK45 recipe included; paper settings need verification |
-| NSE | Implemented; conditioned image-space U-Net | Zenodo downloads identified; schema, checksums and protocol verification pending |
-| KTH | Implemented; frozen VQ-VAE + time-conditioned Transformer | Public video/codec download and conversion commands included |
-| Acrobot frames | MLP / external GPE / TorchScript codec + PhiBE latent train/test | Source and T/S interfaces connected; no-weight warmup is not the paper's GPE training |
-
-No separate validation split is created. Acrobot splits trajectories, NSE splits
-sorted whole files, and KTH splits whole videos 80:20. Small datasets are rounded
-down for training. KTH is **not** the official subject-based benchmark protocol.
+| Dataset | Model |
+| --- | --- |
+| Acrobot angles | Direct state-space velocity predictor |
+| Acrobot frames | MLP / external GPE codec with latent velocity prediction |
+| NSE | Time-conditioned image-space U-Net |
+| KTH | Frozen VQ-VAE with a time-conditioned latent Transformer |
 
 ## Installation
-
-Use Python 3.10 for a new environment. The conservative dependency profile is
-pinned in `requirements.txt`; tests have also run in Python 3.8 / PyTorch 1.13.1.
-The old PyTorch profile is for compatibility, not a claim of current security
-support. Only load trusted, checksummed pickle/checkpoint inputs.
 
 ```bash
 conda env create -f environment.yml
 conda activate anonymous-forecasting
-python -m unittest discover -s tests -v
 ```
 
-For a CPU-only installation without Conda:
+Python 3.10 is recommended for a new environment. Python 3.8 / PyTorch 1.13.1
+has also been tested. For an existing environment, install `requirements.txt`
+after selecting a compatible CPU/CUDA PyTorch build. Load only trusted data
+and checkpoints. Commands below run from the repository root; paths in YAML
+are project-relative. Use `--data`, `--device`, `--batch-size` and
+`--num-workers` to override runtime settings.
 
-```bash
-python -m venv .venv
-# Activate .venv using your shell's normal activation command.
-python -m pip install torch==1.13.1 --index-url https://download.pytorch.org/whl/cpu
-python -m pip install -r requirements.txt
-```
+## Data and Training
 
-For CUDA, install the appropriate PyTorch 1.13.1 CUDA wheel for your driver before
-the remaining requirements. Training defaults to CUDA when available, otherwise
-CPU. `--device cpu`, `--batch-size N` and `--num-workers N` are supported by
-both unified entrypoints. Full KTH training is GPU-oriented; CPU smoke tests use
-small models. No training run downloads files or uses a telemetry service.
+Data and pretrained weights are not bundled. Formats and sources are listed in
+[DATASETS.md](DATASETS.md).
 
-Run commands below from this directory. YAML paths are relative to this project,
-not to an author's machine. `--data` overrides the dataset path.
+### Acrobot angles
 
-## First End-to-End Run: Acrobot Demonstration
-
-This generates **deterministic, zero-noise demonstration data**, not the original
-stochastic benchmark. It is intended to verify installation and the pipeline.
+Generate a small deterministic demonstration and run train/test:
 
 ```bash
 python scripts/generate_acrobot.py
-python scripts/check_setup.py --config configs/acrobot_angles.yaml --data data/acrobot_angles/demo.npz
-python scripts/train.py --config configs/acrobot_angles.yaml --data data/acrobot_angles/demo.npz --epochs 1 --batch-size 32 --num-workers 0
-python scripts/eval.py --config configs/acrobot_angles.yaml --data data/acrobot_angles/demo.npz --batch-size 32 --num-workers 0
+python scripts/train.py --config configs/acrobot_angles.yaml --data data/acrobot_angles/demo.npz --epochs 1
+python scripts/eval.py --config configs/acrobot_angles.yaml --data data/acrobot_angles/demo.npz
 ```
 
-The supplied stochastic generator recipe is now available as
-`python scripts/generate_acrobot_benchmark.py`; see DATASETS.md for its
-nonstandard noisy-RK45 behavior and the required `8/239` default time interval.
-It generates a new seeded dataset, not verified historical paper trajectories.
+For the noisy benchmark recipe, use `scripts/generate_acrobot_benchmark.py`
+and follow its time-grid requirements in DATASETS.md.
 
-For an existing original benchmark, put the trusted dataset at
-`data/acrobot_angles/acrobot_data.pkl` and omit `--data`. Publishing those
-historical files is not necessary if the released generation recipe and
-experimental parameters suffice to reproduce the reported results.
+### Acrobot frames
 
-## Acrobot Images: From-Scratch Pipeline
-
-No GPE source or pretrained checkpoint is required for this **pipeline baseline**.
-Place frame trajectories at `data/acrobot_frames/traj_000/frame_000.png`, etc.
-Use at least two trajectories; five trajectories give exactly four train and
-one test trajectory. No test frames are used to optimize the codec or predictor.
+Put images under `data/acrobot_frames/traj_000/frame_000.png`, etc. The small
+MLP-codec configuration requires no pretrained weights:
 
 ```bash
 python scripts/check_setup.py --config configs/smoke/acrobot_frames.yaml
@@ -93,159 +53,88 @@ python scripts/train.py --config configs/smoke/acrobot_frames.yaml
 python scripts/eval.py --config configs/smoke/acrobot_frames.yaml
 ```
 
-Use `--data path/to/frames` on all three commands for an existing image folder.
-The smoke config uses the first 24 frames of each trajectory, two conditioning
-frames, six autoregressive future frames, three codec epochs and three predictor
-epochs. It tests wiring, not convergence. Results are stored under
-`experiments/acrobot_frames_smoke/`. The full-data entry uses
-`configs/acrobot_frames.yaml` instead (default one future frame).
+Use `configs/acrobot_frames.yaml` for full trajectories. To switch to downloaded
+GPE source or T/S weights, follow [EXTERNAL_CODECS.md](EXTERNAL_CODECS.md).
 
-Training first fits an independent small MLP autoencoder using training images
-only. It then freezes that codec and trains `v(z_history, t)` using the existing
-PhiBE velocity loss, including the full spatial Jacobian when
-`training.include_diffusion: true`. Rollout advances both latent state and time;
-future images are targets, never rollout inputs. This is **not** GPE training
-or a claim to reproduce the paper's image experiment.
+### NSE
 
-- `dataset.prediction_horizon` selects the number of predicted frames.
-- `evaluation.horizons` selects exact-step and prefix-average MSE/PSNR/SSIM.
-- `training.codec_epochs` controls codec pretraining; `--epochs` controls predictor epochs.
-- Fixed test windows are chosen before any training and reused for every epoch's
-  labeled GIF/rollout PNG. Split and sample manifests are saved in `results/`.
-- `last.pt` includes both codec and predictor. Evaluation loads this newly trained
-  checkpoint; it does not need a separately downloaded pretrained model.
-- To inspect without updates, set `training.checkpoint_path` to your checkpoint
-  and `training.load_weights_only: true`. Codec pretraining is skipped, all model
-  parameters remain unchanged, and `frozen_epoch_*.pt` does not overwrite `last.pt`.
-
-Logs include per-stage timers, codec reconstruction error and a last-frame-copy
-baseline. Pixel metrics exclude conditioning frames and use pixels in [0,1].
-Acrobot FVD remains unimplemented for this baseline; enabling it fails explicitly.
-To switch to reader-downloaded GPE without changing training code:
+Download [the NSE shards](https://zenodo.org/records/10939479), verify their
+format and check for duplicates, then convert them or use trusted PT files directly:
 
 ```bash
-git clone https://github.com/wonjunee/GPE_codes.git external/GPE_codes
-python -m pip install --no-deps -r requirements-gpe.txt
-python scripts/check_setup.py --config configs/acrobot_frames_gpe.yaml --trust-external-code --load-codec
-python scripts/train.py --config configs/acrobot_frames_gpe.yaml --trust-external-code
-python scripts/eval.py --config configs/acrobot_frames_gpe.yaml --trust-external-code
+python scripts/prepare_nse.py --source downloaded_nse --output data/nse
+python scripts/check_setup.py --config configs/nse.yaml
+python scripts/train.py --config configs/nse.yaml
+python scripts/eval.py --config configs/nse.yaml
 ```
 
-Review upstream terms before downloading and external code before execution.
-This first-run config uses random external architectures with reconstruction
-warmup, not GPE's geometric objective. Original T.pth/S.pth loading, matching
-class selection, TorchScript and checkpoint compatibility are documented in
-[EXTERNAL_CODECS.md](EXTERNAL_CODECS.md). No GPE source or weights are bundled.
+Set normalization and the physical time interval for your data. Conversion
+requires RAM for one complete PT shard.
 
-## KTH: Download, Prepare, Train, Test
+### KTH
 
-Read the [KTH terms](https://www.csc.kth.se/cvap/actions/) and
-[RIVER model card](https://huggingface.co/cvg-unibe/river_kth_64) first. The
-official KTH data are available for non-commercial use. Downloads are explicit
-and are not redistributed in this source artifact.
+Review the dataset/model terms before downloading:
 
 ```bash
 python scripts/download_assets.py kth_raw --accept-terms
 python scripts/prepare_kth.py
 python scripts/download_assets.py kth_vqvae --accept-terms
 python scripts/check_setup.py --config configs/kth.yaml --load-codec
-python scripts/train.py --config configs/kth.yaml --batch-size 4 --epochs 1
-python scripts/eval.py --config configs/kth.yaml --batch-size 4
+python scripts/train.py --config configs/kth.yaml
+python scripts/eval.py --config configs/kth.yaml
 ```
 
-The commands above are a first run, not full training. The reference config uses
-batch 128, learning rate 2e-4, 10,000 warmup steps and at most 400,000 updates.
-A one-epoch run with warmup is not a convergence test. Reduce batch size for
-memory limits, but record the changed setting. The codec is approximately
-858 MB; raw videos total about 1.2 GB, with additional space needed for HDF5 and
-large training checkpoints. Public codec SHA-256 is pinned in `assets.json`.
-
-For a real-codec pipeline smoke test, substitute `configs/smoke/kth.yaml` in
-the train/eval commands. It uses a small predictor, one update and two future
-frames. This tests integration, not benchmark quality.
-
-The converter stores each full AVI as one video and preserves original frame
-order. This preparation is not asserted to reproduce any unpublished HDF5
-subsequence selection. Use an explicitly documented matching manifest when
-reproducing a specific experiment.
-
-## NSE: Bring Simulation Shards
-
-The source data page is https://zenodo.org/records/10939479 (five PT files,
-about 26.2 GB). See DATASETS.md for citation, licensing and a duplicate-file
-checksum warning. The data schema and exact simulation metadata must be checked before
-claiming this benchmark is independently reproducible. After downloading:
-
-1. Put trusted `.pt` files with shape `[N,T,H,W]` into a temporary input directory.
-2. Convert to float32 `.npy` shards for memory-mapped loading, or use `.pt` directly
-   if RAM can hold all selected files.
-3. Set the dataset path, normalization and physical time grid for that data.
-
-```bash
-python scripts/prepare_nse.py --source downloaded_nse --output data/nse
-python scripts/check_setup.py --config configs/nse.yaml
-python scripts/train.py --config configs/nse.yaml --epochs 1 --batch-size 4
-python scripts/eval.py --config configs/nse.yaml --batch-size 4
-```
-
-Conversion loads one `.pt` shard at a time; allow RAM for that shard. Converted
-`.npy` training normalizes sampled frames on demand. Do not mix original and
-converted copies in one dataset directory. Use at least two shards; five equally
-sized shards give an exact 4:1 file split. The provided normalization constant
-belongs to the original experiment, not arbitrary downloaded NSE data.
+The reference training configuration is GPU-oriented. Use
+`configs/smoke/kth.yaml` for a reduced integration check. Optional FVD setup is
+documented in [FVD.md](FVD.md).
 
 ## Configuration and Outputs
 
-| Setting | Meaning |
+| Setting | Purpose |
 | --- | --- |
-| KTH `dataset.prediction_frames` | Number of generated future frames, default 30 |
-| KTH `evaluation.horizons` | Report exact-step and prefix-average MSE/PSNR/SSIM |
-| KTH `dataset.frame_time_delta` / `frame_stride` | Define time and integration step |
-| NSE `dataset.time_lag` / `training.time_delta` | Sampling stride and forecast-time interval |
-| NSE `visualization.rollout_steps` | Plot horizon, not a multi-step numeric evaluation setting |
-| `visualization.num_fixed_test_samples` | Samples selected before training, unchanged each epoch |
-| `training.checkpoint_path` | Load a compatible predictor checkpoint |
-| `training.load_weights_only: true` | Run without parameter updates; checkpoint_path is required |
-| `evaluation.checkpoint: last.pt` | Evaluate final weights without selecting on test performance |
+| Acrobot frames `dataset.prediction_horizon` | Future frames to generate |
+| KTH `dataset.prediction_frames` | Future frames to generate |
+| Acrobot frames / KTH `evaluation.horizons` | Exact-step and prefix-average metrics |
+| NSE `visualization.rollout_steps` | Plot length; numeric evaluation remains one-step |
+| `visualization.num_fixed_test_samples` | Fixed samples reused across epochs |
+| `training.checkpoint_path` | Load a compatible checkpoint |
+| `training.load_weights_only: true` | Run without parameter updates; requires a checkpoint |
 
-KTH supports exact spatial VJP loss, EMA, resume, per-stage timers and optional
-FVD execution. The paper reports FVD, so validating that protocol is required
-for paper reproduction. See [FVD.md](FVD.md) for reader-managed downloads and
-the unresolved Google TensorFlow / OneDrive / TorchScript distinction.
-Enable FVD only after supplying the separate compatible local I3D detector.
-Acrobot/NSE checkpoint loading is a warm start, not exact RNG/scheduler resume.
-Legacy velocity checkpoints without time conditioning are not interchangeable.
+Outputs are written to `experiments/<name>/{checkpoints,logs,results,figures}`.
+Train/test splits are 80:20 by Acrobot trajectory, NSE file or KTH video, with
+no validation split. KTH does not use the official subject-disjoint protocol.
+Test visualizations reuse samples fixed before training. Report `last.pt` or
+a predetermined training budget rather than choosing weights by test error.
 
-Outputs go to `experiments/<dataset>/{checkpoints,logs,results,figures}`.
-KTH/Acrobot include fixed-test comparison GIFs and rollout images; NSE currently
-provides rollout PNGs and one-step metrics. GIFs need an animation-capable viewer.
-Older `best.pt` files select by test metrics and are diagnostic only; report
-`last.pt` or a training budget fixed in advance. Monitoring test plots repeatedly
-also limits the claim that the test set is untouched.
+Image metrics use future pixels in [0,1]. `*_at_h` measures frame h;
+`*_first_h` averages frames 1 through h. GIFs require an animation-capable viewer.
+Logs include timing. Acrobot/NSE checkpoint loading is a warm start; KTH also
+restores optimizer, EMA and RNG state. Old time-independent checkpoints are
+not interchangeable with the current predictors.
 
-## Verification and Publication
+## Code and Tests
+
+| Directory | Purpose |
+| --- | --- |
+| `configs/` | Dataset and experiment settings |
+| `src/datasets/` | Loading, splitting and sampling |
+| `src/method/loss.py` | PhiBE objectives, full spatial derivatives and separate NSE loss |
+| `src/models/` | Predictors and codec interfaces |
+| `src/trainers/` | Optimization, rollout, evaluation and checkpointing |
+| `src/utils/` | Metrics, visualization, time, logging and I/O |
+| `scripts/` | Train/eval, data preparation and source export |
+| `tests/` | Regression and small pipeline tests |
 
 ```bash
 python -m unittest discover -s tests -v
 python scripts/audit_release.py
-python scripts/audit_release.py --require-ready
 python scripts/export_release.py
 ```
 
-The strict readiness check is expected to fail while release blockers remain.
-The exporter creates a clean `.release/anonymous-code/` directory and ZIP using
-a positive file allowlist and fixed ZIP timestamps. It excludes history,
-private notes, old experiment scripts/configs, datasets, checkpoints and logs.
-Publish only that reviewed directory, not the entire working folder.
+The exporter excludes data, weights, local experiments and Git history.
+Full benchmark convergence is not established by these tests. Random GPE-codec
+warmup uses reconstruction loss, not the original geometric objective; Acrobot
+image FVD is not implemented. NSE data/protocol verification remains incomplete.
 
-Tests cover time conditioning, off-diagonal VJP correctness, checkpoint loading,
-frozen mode, HDF5 variants, preprocessing and tiny train/test entrypoints. They
-are not full benchmark convergence tests. See [REPRODUCIBILITY.md](REPRODUCIBILITY.md)
-for limitations and [DATASETS.md](DATASETS.md) for exact input formats.
-
-Retain [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and `licenses/`.
-Anonymity is not a reason to remove third-party attribution. Project-wide
-license selection is pending in [LICENSE_STATUS.md](LICENSE_STATUS.md).
-
-For a file-by-file explanation of the released code, see
-[CODE_GUIDE.md](CODE_GUIDE.md).
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for attribution and licensing
+status. GPE source and weights must be obtained separately.

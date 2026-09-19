@@ -1,26 +1,12 @@
-# External Acrobot Image Codec
+# Acrobot Image Codecs
 
-GPE source, architecture definitions and weights are **not bundled**. The
-previously copied encoder/decoder have been removed from the current tree.
-Download upstream yourself from [GPE](https://github.com/wonjunee/GPE_codes)
-and read its LICENSE before use. Its terms require prior approval for
-redistribution. This project does not grant that approval.
+Select `codec.type: mlp`, `gpe` or `torchscript`. All backends share the image
+train/eval pipeline. GPE source and weights are not bundled; obtain them from
+[upstream](https://github.com/wonjunee/GPE_codes) under its terms.
 
-Keep third-party source outside this repository (or in the ignored `external/`
-directory). Do not include it, model weights, or exported models in an anonymous
-release. Removing current files does not remove copies from old Git commits.
+## GPE Without Pretrained Weights
 
-## Three interchangeable backends
-
-The unified `scripts/train.py`, `scripts/eval.py` and `scripts/check_setup.py`
-support `codec.type: mlp`, `gpe` or `torchscript`. All use the same trajectory-level
-80:20 split, time-conditioned latent predictor, pixel metrics and fixed-test
-comparison GIF/rollout PNG outputs. Only the encoder/decoder backend changes.
-Do not reuse a trained predictor across different codecs or latent dimensions.
-
-## Download source and run without pretrained weights
-
-Install the base project requirements first. After reviewing upstream terms:
+After installing the base project requirements and reviewing upstream code:
 
 ```bash
 git clone https://github.com/wonjunee/GPE_codes.git external/GPE_codes
@@ -30,27 +16,19 @@ python scripts/train.py --config configs/acrobot_frames_gpe.yaml --trust-externa
 python scripts/eval.py --config configs/acrobot_frames_gpe.yaml --trust-external-code
 ```
 
-Put trajectories in `data/acrobot_frames/`, or add `--data path/to/frames` to
-all commands. Use `--gpe-source path/to/GPE_codes` for a different source folder.
-The GPE config is a small first-run configuration: 24 frames per trajectory,
-two input frames, six future frames, three codec epochs and three predictor
-epochs. Set `dataset.max_frames: null` and choose an explicit training budget
-for a full experiment. Outputs use `experiments/acrobot_frames_gpe/`.
+Use `--data path/to/frames` and `--gpe-source path/to/GPE_codes` for other
+locations. The first-run config uses 24 frames per trajectory, two input frames,
+six future frames and three epochs per stage. Set `dataset.max_frames: null`
+for full trajectories.
 
-This imports the reader's `TransportT` / `TransportG` definitions and initializes
-them randomly. Reconstruction MSE is optimized on **training images only**, then
-the codec is frozen and the PhiBE predictor is trained. This is an external-GPE
-**architecture integration check, not GPE's geometric training objective** and
-not paper reproduction. Downloading source does not provide trained Acrobot weights.
+Random `TransportT` / `TransportG` networks receive train-only reconstruction
+warmup, then remain frozen during PhiBE predictor training. This is **not**
+GPE's geometric training objective. Optional requirements support importing
+the architecture only, not every upstream training script.
 
-The adapter-only optional requirements pin TorchCFM 1.0.7 and POT 0.9.4 because
-the upstream architecture module imports TorchCFM even when its flow model is
-unused. `--no-deps` avoids replacing the base PyTorch/NumPy environment. This is
-not the environment for running every upstream GPE/CFM training script.
+## Original T/S Checkpoints
 
-## Load original T.pth and S.pth directly
-
-Use matching, trusted Acrobot weights and set these fields in the GPE config:
+Set the following in the GPE config and run the same commands:
 
 ```yaml
 codec:
@@ -65,22 +43,17 @@ codec:
   decoder_checkpoint: data/acrobot_frames/codec/S.pth
 ```
 
-Keep `model.latent_dim` consistent with those weights (the supplied GPE config
-uses 3). Run the same commands with `--trust-external-code`. Reconstruction
-pretraining is skipped; the loaded codec remains frozen. Plain tensor state
-dictionaries, a `state_dict` wrapper, and a uniform `module.` prefix are supported.
-Key and tensor-shape matching is strict: incompatible weights are never partially
-loaded or silently replaced with random weights.
+Match `model.latent_dim` to the weights (the provided config uses 3).
+Pretrained codecs are frozen and skip reconstruction training. Plain tensor
+state dictionaries, `state_dict` wrappers and uniform `module.` prefixes are
+supported; key and shape matching is strict.
 
-Some older Acrobot experiments used a modified decoder called `TransportG_mod`.
-Those weights require that exact class in the reader's external source and
-`codec.decoder_class: TransportG_mod`. The public upstream default `TransportG`
-has a different architecture. This repository does not distribute the modified
-implementation or those checkpoints, and cannot promise their public availability.
+Weights trained with `TransportG_mod` require that class in the reader-owned
+source and `codec.decoder_class: TransportG_mod`; upstream `TransportG` is not
+compatible. Modified source and compatible pretrained Acrobot weights are not
+provided by this repository.
 
-## Optional TorchScript backend
-
-If independently exported compatible artifacts are available:
+## TorchScript
 
 ```yaml
 codec:
@@ -91,38 +64,21 @@ codec:
   decoder_checkpoint: data/acrobot_frames/codec/decoder.ts
 ```
 
-No GPE source or TorchCFM is needed for this backend. The encoder must map float
-`[B,1,H,W]` in [-1,1] to `[B,model.latent_dim]`; the decoder must map back to
-finite pixels `[B,1,H,W]` in [-1,1]. The adapter checks batch sizes 1 and 2 before
-training. It expects tensors, not tuples or dictionaries. T.pth/S.pth state
-dictionaries cannot be converted to TorchScript by renaming the files.
+No GPE source or TorchCFM is needed. The encoder maps `[B,1,H,W]` in [-1,1]
+to `[B,model.latent_dim]`; the decoder returns finite `[B,1,H,W]` pixels in
+[-1,1]. Both must return tensors. Renaming T.pth/S.pth does not create TorchScript.
 
-## Switching, checkpoints and trust
+## Compatibility
 
-- `--codec mlp|gpe|torchscript` overrides the backend, but its YAML paths,
-  initialization and latent dimension must still match the selected backend.
-- `--trust-external-code` permits Python/TorchScript execution after your review;
-  it is not a security sandbox or a substitute for upstream permission.
-- Pipeline v2 checkpoints contain both codec and predictor tensors. Restoring
-  GPE requires the matching external source module and class names, but no longer
-  needs the original separate T.pth/S.pth files.
-- TorchScript restoration still needs both exported files. Their SHA-256 values
-  are checked against the saved pipeline identity.
-- The GPE architecture file SHA-256 and class names are recorded and checked.
-  This does not hash imported dependencies; record the complete environment too.
-- Existing v1 MLP pipeline checkpoints remain supported. Acrobot loading is a
-  warm start, not exact optimizer/RNG resume.
+- `--codec mlp|gpe|torchscript` overrides the backend; paths, initialization and
+  latent dimensions must still match. Do not reuse a predictor across codecs.
+- `--trust-external-code` permits reviewed Python/TorchScript execution; it is
+  not a sandbox or a grant of redistribution permission.
+- Pipeline checkpoints contain codec and predictor tensors. GPE restoration
+  needs matching source/classes, but not the original separate T/S files.
+  TorchScript restoration still needs both exported artifacts.
+- Source-module or artifact hashes are checked on restoration. Imported
+  dependencies are not hashed. Existing v1 MLP checkpoints remain supported.
 
-Integration was tested with upstream commit
-`3c38a4e00a4bb2de7ec5166c0ebba32a291a770e`; architecture module SHA-256:
-`ae9aa1f5ea4f9fde794c096fd8fedb12c8267c72f0e4f71f85c9e7ff229abea7`.
-Pin that upstream revision to reproduce this interface check rather than assuming
-future upstream changes are compatible. Source import, random initialization,
-reconstruction warmup, forecast training and independent evaluation were exercised.
-Matching reader-supplied modified-class T/S weights were also exercised locally.
-These checks establish interoperability, not public weight provenance or convergence.
-
-The paper-specific geometric codec training recipe and Acrobot FVD remain
-unverified/unimplemented here. No future frames are used as predictor inputs;
-older whole-trajectory smoothing and forward-difference preprocessing are not
-part of this unified image pipeline.
+The tested upstream revision is `3c38a4e00a4bb2de7ec5166c0ebba32a291a770e`.
+Pin it for the same interface; future upstream revisions may differ.
