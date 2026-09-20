@@ -165,7 +165,7 @@ class TimeConditioningTests(unittest.TestCase):
                 config = yaml.safe_load((root / "configs" / f"{name}.yaml").read_text())
                 config["training"].update(device="cpu", epochs=1)
                 config["dataset"].update(batch_size=8, num_workers=0)
-                config["visualization"].update(num_fixed_test_samples=1, rollout_steps=2)
+                config["visualization"].update(num_fixed_samples=1, rollout_steps=2)
                 for key in config["paths"]:
                     config["paths"][key] = str(directory / key)
                 if name == "acrobot_angles":
@@ -191,10 +191,23 @@ class TimeConditioningTests(unittest.TestCase):
                 config_path = directory / "config.yaml"
                 config_path.write_text(yaml.safe_dump(config))
                 try:
-                    with patch.object(sys, "argv", ["train.py", "--config", str(config_path)]):
+                    trainer_class = StateTrainer if name == "acrobot_angles" else NSETrainer
+                    original_evaluate = trainer_class.evaluate_loader
+                    evaluated_counts = []
+                    def checked_evaluate(instance, loader):
+                        count = (len(loader.dataset.rollout_trajectories) if name == "acrobot_angles"
+                                 else len(loader.dataset.trajectories))
+                        evaluated_counts.append(count)
+                        return original_evaluate(instance, loader)
+                    with patch.object(trainer_class, "evaluate_loader", checked_evaluate), patch.object(sys, "argv", ["train.py", "--config", str(config_path)]):
                         train.main()
-                    with patch.object(sys, "argv", ["eval.py", "--config", str(config_path)]):
+                    with patch.object(trainer_class, "evaluate_loader", checked_evaluate), patch.object(sys, "argv", ["eval.py", "--config", str(config_path)]):
                         evaluate.main()
+                    self.assertEqual(evaluated_counts, [4, 1])
+                    history = json.loads((directory / "result_dir/train_history.json").read_text())
+                    self.assertIn("train_rollout_mse", history)
+                    self.assertFalse(any(key.startswith("test_") for key in history))
+                    self.assertTrue((directory / "result_dir/fixed_train_samples.json").is_file())
                     self.assertFalse((directory / "checkpoint_dir" / "best.pt").exists())
                     self.assertTrue((directory / "checkpoint_dir" / "epoch_001.pt").exists())
                     self.assertTrue((directory / "result_dir" / "eval_metrics.json").exists())

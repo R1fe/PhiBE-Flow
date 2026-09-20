@@ -12,6 +12,7 @@ import yaml
 
 from scripts import train, eval as evaluate
 from src.models.acrobot_frame_model import AcrobotFrameModel
+from src.trainers.acrobot_frame_pipeline import AcrobotFrameTrainer
 
 
 class ImagePipelineTests(unittest.TestCase):
@@ -51,7 +52,13 @@ class ImagePipelineTests(unittest.TestCase):
             config["paths"] = {key: str(root / key) for key in config["paths"]}
             path = root / "config.yaml"
             path.write_text(yaml.safe_dump(config))
-            with patch.object(sys, "argv", ["train.py", "--config", str(path)]):
+            evaluated_splits = []
+            original_evaluate = AcrobotFrameTrainer.evaluate
+            def checked_evaluate(instance, loader):
+                evaluated_splits.append(set(loader.dataset.trajectory_names))
+                self.assertFalse(loader.drop_last)
+                return original_evaluate(instance, loader)
+            with patch.object(AcrobotFrameTrainer, "evaluate", checked_evaluate), patch.object(sys, "argv", ["train.py", "--config", str(path)]):
                 train.main()
             checkpoint_dir = root / "checkpoint_dir"
             first = torch.load(checkpoint_dir / "epoch_001.pt", map_location="cpu")
@@ -62,17 +69,24 @@ class ImagePipelineTests(unittest.TestCase):
             for key in final["model"]:
                 if key.startswith("codec."):
                     torch.testing.assert_close(codec_before["model"][key], final["model"][key], rtol=0, atol=0)
-            manifest = (root / "result_dir/fixed_test_samples.json").read_text()
+            manifest = (root / "result_dir/fixed_train_samples.json").read_text()
             split = json.loads((root / "result_dir/split_manifest.json").read_text())
             self.assertEqual((len(split["train"]), len(split["test"])), (4, 1))
             self.assertFalse(set(split["train"]) & set(split["test"]))
+            self.assertEqual(evaluated_splits, [set(split["train"])] * 2)
+            self.assertTrue(all(sample["trajectory"] in split["train"] for sample in json.loads(manifest)))
+            history = json.loads((root / "result_dir/history.json").read_text())
+            self.assertTrue(all(row["rollout_split"] == "train" and "train_mse" in row for row in history))
             for epoch in (1, 2):
                 figure = root / f"figure_dir/epoch_{epoch:03d}/sample_00"
                 self.assertTrue(figure.with_suffix(".png").is_file())
                 with Image.open(figure.with_suffix(".gif")) as gif:
                     self.assertEqual(gif.n_frames, 5)
-            with patch.object(sys, "argv", ["eval.py", "--config", str(path)]):
+            with patch.object(AcrobotFrameTrainer, "evaluate", checked_evaluate), patch.object(sys, "argv", ["eval.py", "--config", str(path)]):
                 evaluate.main()
+            self.assertEqual(evaluated_splits[-1], set(split["test"]))
+            test_manifest = json.loads((root / "result_dir/eval_fixed_test_samples.json").read_text())
+            self.assertTrue(all(sample["trajectory"] in split["test"] for sample in test_manifest))
             metrics = json.loads((root / "result_dir/eval_metrics.json").read_text())
             self.assertTrue(np.isfinite(metrics["mse"]))
             self.assertIn("mse_at_3", metrics)
@@ -84,7 +98,7 @@ class ImagePipelineTests(unittest.TestCase):
             frozen = torch.load(checkpoint_dir / "frozen_epoch_003.pt", map_location="cpu")
             for key in final["model"]:
                 torch.testing.assert_close(final["model"][key], frozen["model"][key], rtol=0, atol=0)
-            self.assertEqual(manifest, (root / "result_dir/fixed_test_samples.json").read_text())
+            self.assertEqual(manifest, (root / "result_dir/fixed_train_samples.json").read_text())
 
 
 if __name__ == "__main__":

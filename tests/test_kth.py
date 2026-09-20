@@ -61,7 +61,7 @@ def tiny_config(root):
     config.training.update(epochs=1, max_steps=10, warmup_steps=0, device="cpu")
     config.evaluation.horizons = [1, 3]
     config.vqvae.checkpoint_path = str(Path(root) / "vq.ckpt")
-    config.visualization.update(num_fixed_test_samples=1, rollout_plot_frames=5)
+    config.visualization.update(num_fixed_samples=1, rollout_plot_frames=5)
     for key in config.paths:
         config.paths[key] = str(Path(root) / key)
     return config
@@ -254,16 +254,32 @@ class KTHTests(unittest.TestCase):
             config_path = Path(tmp) / "kth.yaml"
             config_path.write_text(yaml.safe_dump(plain(config)), encoding="utf-8")
             with patch("src.models.vqvae.vq_f8_small_ddconfig", TINY_VQ):
-                with patch.object(sys, "argv", ["train.py", "--config", str(config_path), "--epochs", "1"]):
+                evaluated_records = []
+                original_evaluate = KTHTrainer.evaluate_loader
+                def checked_evaluate(instance, loader, **kwargs):
+                    evaluated_records.append({record.key for record in loader.dataset.records})
+                    self.assertFalse(loader.drop_last)
+                    return original_evaluate(instance, loader, **kwargs)
+                with patch.object(KTHTrainer, "evaluate_loader", checked_evaluate), patch.object(sys, "argv", ["train.py", "--config", str(config_path), "--epochs", "1"]):
                     train.main()
                 checkpoint = Path(config.paths.checkpoint_dir) / "epoch_001.pt"
                 payload = torch.load(checkpoint, weights_only=False)
                 self.assertIn("data_identity", payload)
                 self.assertFalse((Path(config.paths.checkpoint_dir) / "best.pt").exists())
                 self.assertEqual(payload["global_step"], 2)
+                self.assertEqual(payload["history"][0]["rollout_split"], "train")
+                self.assertIn("train_mse", payload["history"][0])
+                train_manifest = (Path(config.paths.result_dir)/"fixed_train_samples.json").read_text()
+                self.assertTrue(all(sample["video_key"] in evaluated_records[0]
+                                    for sample in json.loads(train_manifest)))
                 self.assertTrue((Path(config.paths.figure_dir)/"epoch_001/sample_00.gif").exists())
-                with patch.object(sys, "argv", ["eval.py", "--config", str(config_path)]):
+                with patch.object(KTHTrainer, "evaluate_loader", checked_evaluate), patch.object(sys, "argv", ["eval.py", "--config", str(config_path)]):
                     evaluate.main()
+                self.assertEqual([len(records) for records in evaluated_records], [4, 1])
+                self.assertFalse(evaluated_records[0] & evaluated_records[1])
+                self.assertEqual(train_manifest, (Path(config.paths.result_dir)/"fixed_train_samples.json").read_text())
+                test_manifest = json.loads((Path(config.paths.result_dir)/"eval_fixed_test_samples.json").read_text())
+                self.assertTrue(all(sample["video_key"] in evaluated_records[1] for sample in test_manifest))
                 metrics = json.loads((Path(config.paths.result_dir)/"eval_metrics.json").read_text())
                 self.assertIn("mse_at_3", metrics)
                 self.assertIn("evaluation_seconds", metrics)
