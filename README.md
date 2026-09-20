@@ -95,8 +95,8 @@ documented in [FVD.md](FVD.md).
 | Acrobot frames `dataset.prediction_horizon` | Future frames to generate |
 | KTH `dataset.prediction_frames` | Future frames to generate |
 | Acrobot frames / KTH `evaluation.horizons` | Exact-step and prefix-average metrics |
-| NSE `visualization.rollout_steps` | Plot length; numeric rollout covers every test trajectory to its end |
-| `visualization.num_fixed_test_samples` | Fixed samples reused across epochs |
+| NSE `visualization.rollout_steps` | Plot length; numeric rollout covers every trajectory in the evaluated split to its end |
+| `visualization.num_fixed_samples` | Fixed samples reused across epochs |
 | `training.checkpoint_path` | Load a compatible checkpoint |
 | `training.load_weights_only: true` | Run without parameter updates; requires a checkpoint |
 
@@ -104,11 +104,17 @@ Outputs are written to `experiments/<name>/{checkpoints,logs,results,figures}`.
 Acrobot and NSE use 80:20 trajectory/file splits. KTH uses the official subject
 IDs, excluding validation subjects by default; see DATASETS.md. No validation
 loader or test-based model selection is used.
-Test visualizations reuse samples fixed before training. Each epoch evaluates
-all test trajectories/videos with autoregressive rollout and saves an independent
+Training visualizations reuse training samples fixed before the first epoch.
+Each epoch evaluates all training trajectories/videos with autoregressive rollout
+in evaluation mode, without parameter updates, and saves an independent
 `epoch_NNN.pt` plus `last.pt`. No `best.pt` is generated. Acrobot angle/NSE rollout
 metrics exclude the conditioning prefix and cover each trajectory to its end;
 image/KTH rollout uses the configured future horizon.
+Epoch metrics use `train_*` names and fixed sample IDs are saved in
+`fixed_train_samples.json`. The standalone `scripts/eval.py` evaluates the held-out
+test split; image/KTH test visualizations use `eval_fixed_test_samples.json`.
+The legacy `visualization.num_fixed_test_samples` key is accepted as an alias
+when `num_fixed_samples` is absent; it does not select the data split.
 
 Image metrics use future pixels in [0,1]. `*_at_h` measures frame h;
 `*_first_h` averages frames 1 through h. GIFs require an animation-capable viewer.
