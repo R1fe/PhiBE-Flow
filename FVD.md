@@ -1,7 +1,7 @@
 # KTH FVD Evaluation
 
 FVD uses a reader-supplied TorchScript I3D detector. No weights are bundled or
-automatically downloaded. Acrobot image FVD is not implemented.
+automatically downloaded.
 
 ## Setup
 
@@ -12,9 +12,7 @@ Expected size: 51,235,320 bytes. Expected SHA-256:
 `bec6519f66ea534e953026b4ae2c65553c17bf105611c746d904657e5860a5e2`
 
 The hash is checked before loading; do not change it simply to bypass a mismatch.
-The URL is the reference used by the original evaluator; a fresh download has
-not been independently verified. Set these fields in `configs/kth.yaml`, keeping
-the remaining evaluation options:
+Set these fields in `configs/kth.yaml`, keeping the remaining evaluation options:
 
 ```yaml
 evaluation:

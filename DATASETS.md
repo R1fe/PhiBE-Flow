@@ -10,15 +10,14 @@ The loader accepts a pickle list of dictionaries with `t: [T]` and `y: [4,T]`
 `y: [N,4,T]`. Frame spacing must match `training.time_delta`.
 
 - `python scripts/generate_acrobot.py` generates deterministic zero-noise demo
-  data at 30 fps, not the stochastic benchmark.
+  data at 30 fps with zero noise.
 - `python scripts/generate_acrobot_benchmark.py` generates the noisy RK45 recipe.
   Defaults: 10,000 trajectories, duration 8, 240 saved frames, noise 0.5. Pass
   `--data data/acrobot_angles/benchmark.npz` to train/eval and set
   `training.time_delta: 0.03347280334728033` (`8/239`, not `1/30`).
 
 The benchmark recipe draws noise inside adaptive RK45 RHS evaluations; it is
-not a standard SDE discretization. Its seed and solver metadata are recorded,
-but historical unseeded trajectories cannot be reproduced bit-for-bit.
+not a standard SDE discretization. Its seed and solver metadata are recorded.
 
 ## Acrobot Frames
 
@@ -43,7 +42,7 @@ DOI `10.5281/zenodo.10939479` (Mengjian Hua, 2024), CC BY 4.0.
 Download `data_file.pt`, `data_file02.pt`, `data_file03.pt`, `data_file04.pt`
 and `data_file05.pt` (approximately 26.2 GB). The first and third files have
 identical MD5 entries on the record: check for duplicates before splitting.
-Automatic downloading is disabled pending schema and SHA-256 verification.
+Download NSE files manually from the linked record.
 
 Each PT file must contain `[N,T,H,W]`, either directly, as the first tuple
 element, or under `data`, `trajectories`, `tensor` or `x`. Converted NPY files

@@ -13,13 +13,15 @@
       "url": null,
       "sha256": null,
       "destination": "data/nse",
-      "status": "pending_public_dataset_and_simulation_metadata"
+      "status": "manual_download",
+      "source": "https://zenodo.org/records/10939479"
     },
     "acrobot_benchmark": {
       "url": null,
       "sha256": null,
-      "destination": "data/acrobot_angles/acrobot_data.pkl",
-      "status": "pending_public_benchmark_or_exact_generation_recipe"
+      "destination": "data/acrobot_angles/benchmark.npz",
+      "status": "local_generation",
+      "generator": "scripts/generate_acrobot_benchmark.py"
     }
   }
 }

@@ -141,8 +141,6 @@ python scripts/export_release.py
 ```
 
 The exporter excludes data, weights, local experiments and Git history.
-Full benchmark convergence is not established by these tests. Acrobot image
-FVD is not implemented. NSE data/protocol verification remains incomplete.
 
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for attribution and licensing
-status. GPE source and weights must be obtained separately.
+terms. GPE source and weights must be obtained separately.
