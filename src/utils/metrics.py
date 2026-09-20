@@ -48,13 +48,14 @@ def kth_frame_metrics(prediction, truth, horizons):
 def drift_mse_from_rollout(
     predicted_rollout: np.ndarray,
     ground_truth_rollout: np.ndarray,
+    condition_frames: int = 0,
 ) -> float:
-    """Mean squared error between predicted and ground-truth state trajectories."""
+    """Future-only state MSE; exclude copied conditioning frames explicitly."""
     length = min(len(predicted_rollout), len(ground_truth_rollout))
-    if length == 0:
-        raise ValueError("Cannot compute metrics on empty trajectories.")
-    diff = np.asarray(predicted_rollout[:length], dtype=np.float64) - np.asarray(
-        ground_truth_rollout[:length],
+    if condition_frames < 0 or length <= condition_frames:
+        raise ValueError("Cannot compute metrics without future frames.")
+    diff = np.asarray(predicted_rollout[condition_frames:length], dtype=np.float64) - np.asarray(
+        ground_truth_rollout[condition_frames:length],
         dtype=np.float64,
     )
     if not np.all(np.isfinite(diff)):
