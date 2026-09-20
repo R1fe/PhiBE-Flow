@@ -255,7 +255,6 @@ class LatentTrainer:
         checkpoint_every: int = 5,
     ) -> dict:
         history: list[dict] = []
-        best_metric = float("inf")
         for epoch in range(1, epochs + 1):
             train_loss = self.train_epoch(train_loader)
             validation_loss = self.evaluate_loader(validation_loader)
@@ -289,22 +288,9 @@ class LatentTrainer:
                 metrics["decoded_mse"],
             )
             metric = float(metrics["position_normalized_mse"])
-            if metric < best_metric:
-                best_metric = metric
+            for filename in (f"epoch_{epoch:03d}.pt", "last.pt"):
                 save_checkpoint(
-                    self.checkpoint_dir / "best.pt",
-                    self.model,
-                    self.optimizer,
-                    epoch,
-                    metric,
-                    extra={"history": history, "validation_name": validation_name},
-                )
-                (self.result_dir / "best_metrics.json").write_text(
-                    json.dumps(record, indent=2), encoding="utf-8"
-                )
-            if checkpoint_every > 0 and epoch % checkpoint_every == 0:
-                save_checkpoint(
-                    self.checkpoint_dir / f"epoch_{epoch:03d}.pt",
+                    self.checkpoint_dir / filename,
                     self.model,
                     self.optimizer,
                     epoch,
@@ -315,10 +301,4 @@ class LatentTrainer:
                 json.dumps(history, indent=2), encoding="utf-8"
             )
             self.scheduler.step()
-            if (
-                float(metrics["normalized_mse"]) <= target_normalized_mse
-                and float(metrics["position_r2_mean"]) >= target_position_r2
-            ):
-                self.logger.info("Similarity target reached at epoch %d.", epoch)
-                break
-        return {"history": history, "best_metric": best_metric}
+        return {"history": history}

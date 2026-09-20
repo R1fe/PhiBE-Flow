@@ -63,18 +63,16 @@ def _run_kth(config, args, device, project_root, evaluation=False):
                                   weight_decay=float(config.training.weight_decay))
     logger = build_logger("kth_eval" if evaluation else "kth_train",
                           resolve_path(project_root, config.paths.log_dir) / ("eval.log" if evaluation else "train.log"))
-    trainer = KTHTrainer(model, codec, optimizer, device, config, project_root, logger)
-    manifest = {}
-    root = resolve_path(project_root, config.dataset.dataset_path).resolve()
-    root = root.parent if root.is_file() else root
-    for name, dataset in (("train", train), ("test", test)):
-        manifest[name] = [{"shard": str(record.shard.relative_to(root)), "video_key": record.key,
-                           "length": record.length} for record in dataset.records]
-    (trainer.result_dir / "split_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    trainer = KTHTrainer(model, codec, optimizer, device, config, project_root, logger,
+                         data_identity=train.data_identity)
+    manifest = train.split_manifest
     samples = fixed_kth_samples(test, int(config.visualization.num_fixed_test_samples),
                                 int(config.training.seed)) if config.visualization.enabled else []
     fixed_manifest = [{k: v for k, v in sample.items() if k not in ("frames", "times")} for sample in samples]
-    (trainer.result_dir / "fixed_test_samples.json").write_text(json.dumps(fixed_manifest, indent=2), encoding="utf-8")
+    def save_manifests():
+        prefix = "eval_" if evaluation else ""
+        (trainer.result_dir / (prefix + "split_manifest.json")).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        (trainer.result_dir / (prefix + "fixed_test_samples.json")).write_text(json.dumps(fixed_manifest, indent=2), encoding="utf-8")
     logger.info("KTH train=%s test=%s videos | dt=%s | parameters=%s | frozen=%s",
                 len(train), len(test), trainer.dt, sum(p.numel() for p in model.parameters()),
                 not trainer.update_parameters)
@@ -82,6 +80,7 @@ def _run_kth(config, args, device, project_root, evaluation=False):
         checkpoint = (resolve_path(project_root, args.checkpoint) if args.checkpoint else
                       trainer.checkpoint_dir / str(config.evaluation.checkpoint))
         trainer.load(checkpoint, resume=False)
+        save_manifests()
         detector = None
         if bool(config.evaluation.fvd):
             from src.utils.fvd import load_fvd_detector, SERVER_I3D_SHA256
@@ -96,6 +95,7 @@ def _run_kth(config, args, device, project_root, evaluation=False):
         trainer._sync()
         metrics["evaluation_seconds"] = perf_counter()-start
         metrics["use_ema"] = use_ema
+        metrics["data_identity"] = trainer.data_identity
         if detector is not None:
             metrics["fvd_protocol"] = {
                 "backend": "torchscript_i3d",
@@ -112,6 +112,7 @@ def _run_kth(config, args, device, project_root, evaluation=False):
         return metrics
     if config.training.checkpoint_path:
         trainer.load(resolve_path(project_root, config.training.checkpoint_path))
+    save_manifests()
     default_epochs = int(config.training.epochs) if trainer.update_parameters else 1
     epochs = args.epochs if args.epochs is not None else default_epochs
     if epochs < 1:

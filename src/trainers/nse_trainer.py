@@ -65,8 +65,7 @@ class NSETrainer:
         rollout_steps: int = 6,
         rollout_plot_frames: int = 8,
     ) -> dict[str, list[float]]:
-        history = {"train_velocity_loss": [], "test_velocity_loss": [], "test_mse": []}
-        best_test_mse = float("inf")
+        history = {"train_velocity_loss": [], "test_velocity_loss": [], "test_mse": [], "test_rollout_mse": []}
 
         for epoch in range(1, epochs + 1):
             train_loss = self._train_epoch(train_loader, epoch, epochs)
@@ -74,14 +73,16 @@ class NSETrainer:
             history["train_velocity_loss"].append(train_loss)
             history["test_velocity_loss"].append(test_metrics["velocity_loss"])
             history["test_mse"].append(test_metrics["mse"])
+            history["test_rollout_mse"].append(test_metrics["rollout_mse"])
 
             self.logger.info(
-                "Epoch %s/%s | train_velocity_loss=%.6f | test_velocity_loss=%.6f | test_mse=%.6f",
+                "Epoch %s/%s | train_velocity_loss=%.6f | test_velocity_loss=%.6f | test_mse=%.6f | test_rollout_mse=%.6f",
                 epoch,
                 epochs,
                 train_loss,
                 test_metrics["velocity_loss"],
                 test_metrics["mse"],
+                test_metrics["rollout_mse"],
             )
             if fixed_test_trajectories and visualize_every > 0 and epoch % visualize_every == 0:
                 self.visualize_rollouts(
@@ -96,16 +97,6 @@ class NSETrainer:
                     save_checkpoint(self.checkpoint_dir / filename, self.model, self.optimizer,
                                     epoch=epoch, metric=test_metrics["mse"],
                                     extra={"global_step": self.global_step, "history": history})
-            if self.update_parameters and test_metrics["mse"] < best_test_mse:
-                best_test_mse = test_metrics["mse"]
-                save_checkpoint(
-                    self.checkpoint_dir / "best.pt",
-                    self.model,
-                    self.optimizer,
-                    epoch=epoch,
-                    metric=best_test_mse,
-                    extra={"global_step": self.global_step, "history": history},
-                )
 
         history_name = "train_history.json" if self.update_parameters else "frozen_history.json"
         (self.result_dir / history_name).write_text(
@@ -141,13 +132,28 @@ class NSETrainer:
         for batch in data_loader:
             size = len(batch[0])
             velocity_total += size * float(
-                nse_velocity_loss(self.model, batch, self.device, self.time_delta)
+                nse_velocity_loss(self.model, batch, self.device, self.time_delta, create_graph=False)
             )
             mse_total += size * float(nse_prediction_mse(self.model, batch, self.device, self.time_delta))
             samples += size
         if samples == 0:
             raise ValueError("Received an empty NSE test loader.")
-        return {"velocity_loss": velocity_total / samples, "mse": mse_total / samples}
+        rollout_total, elements, count = 0.0, 0, 0
+        dataset = data_loader.dataset
+        for index in range(len(dataset.trajectories)):
+            trajectory = dataset.get_trajectory(index)
+            steps = (len(trajectory) - 1) // self.time_lag - 1
+            if steps < 1:
+                continue
+            truth, prediction = self.rollout(trajectory, steps)
+            error = (prediction[2:].double() - truth[2:].double()).square()
+            rollout_total += float(error.sum())
+            elements += error.numel()
+            count += 1
+        if not elements:
+            raise ValueError("No NSE test trajectories have future frames for rollout.")
+        return {"velocity_loss": velocity_total / samples, "mse": mse_total / samples,
+                "rollout_mse": rollout_total / elements, "num_rollout_trajectories": count}
 
     @torch.no_grad()
     def rollout(self, trajectory: torch.Tensor, rollout_steps: int) -> tuple[torch.Tensor, torch.Tensor]:

@@ -5,12 +5,11 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from src.method.loss import validation_mse_loss, velocity_loss
-from src.utils.checkpoint import load_checkpoint, save_checkpoint
+from src.utils.checkpoint import save_checkpoint
 from src.utils.metrics import drift_mse_from_rollout
 from src.utils.time import batch_time
 from src.utils.visualization import visualize_acrobot_prediction
@@ -73,16 +72,14 @@ class StateTrainer:
         figure_dir: str | Path | None = None,
         transform_angles: bool = False,
         visualize_every: int = 1,
-        checkpoint_every: int = 1,
-        selection_metric: str = "drift_mse",
     ) -> dict[str, list[float]]:
         history = {
             "train_velocity_loss": [],
             "test_drift_mse": [],
             "test_velocity_loss": [],
             "visualization_mse": [],
+            "test_rollout_mse": [],
         }
-        best_test = float("inf")
         figure_dir = Path(figure_dir) if figure_dir is not None else None
 
         for epoch in range(1, epochs + 1):
@@ -111,11 +108,13 @@ class StateTrainer:
                 None if test_metrics is None else test_metrics["velocity_loss"]
             )
             history["visualization_mse"].append(visualization_mse)
+            history["test_rollout_mse"].append(None if test_metrics is None else test_metrics["rollout_mse"])
 
             self.writer.add_scalar("loss/train_velocity", train_loss, epoch)
             if test_metrics is not None:
                 self.writer.add_scalar("loss/test_velocity", test_metrics["velocity_loss"], epoch)
                 self.writer.add_scalar("loss/test_drift_mse", test_metrics["drift_mse"], epoch)
+                self.writer.add_scalar("test/rollout_mse", test_metrics["rollout_mse"], epoch)
             if visualization_mse is not None:
                 self.writer.add_scalar("viz/test_rollout_mse", visualization_mse, epoch)
 
@@ -123,8 +122,8 @@ class StateTrainer:
                 message = "Epoch %s/%s | train_velocity_loss=%.6f" % (epoch, epochs, train_loss)
                 if test_metrics is not None:
                     message += (
-                        " | test_velocity_loss=%.6f | test_drift_mse=%.6f"
-                        % (test_metrics["velocity_loss"], test_metrics["drift_mse"])
+                        " | test_velocity_loss=%.6f | test_drift_mse=%.6f | test_rollout_mse=%.6f"
+                        % (test_metrics["velocity_loss"], test_metrics["drift_mse"], test_metrics["rollout_mse"])
                     )
                 if visualization_mse is not None:
                     message += " | viz_rollout_mse=%.6f" % visualization_mse
@@ -133,32 +132,13 @@ class StateTrainer:
             if self.update_parameters:
                 save_checkpoint(self.checkpoint_dir / "last.pt", self.model, self.optimizer,
                                 epoch=epoch, extra={"history": history})
-            if self.update_parameters and checkpoint_every > 0 and epoch % checkpoint_every == 0:
+            if self.update_parameters:
                 save_checkpoint(
                     path=self.checkpoint_dir / f"epoch_{epoch:03d}.pt",
                     model=self.model,
                     optimizer=self.optimizer,
                     epoch=epoch,
                     metric=None if test_metrics is None else test_metrics["drift_mse"],
-                    extra={"history": history},
-                )
-
-            if selection_metric == "visualization_mse":
-                current_best_metric = visualization_mse
-            elif selection_metric == "drift_mse":
-                current_best_metric = None if test_metrics is None else test_metrics["drift_mse"]
-            else:
-                raise ValueError(
-                    "selection_metric must be 'drift_mse' or 'visualization_mse'."
-                )
-            if self.update_parameters and current_best_metric is not None and current_best_metric < best_test:
-                best_test = current_best_metric
-                save_checkpoint(
-                    path=self.checkpoint_dir / "best.pt",
-                    model=self.model,
-                    optimizer=self.optimizer,
-                    epoch=epoch,
-                    metric=current_best_metric,
                     extra={"history": history},
                 )
 
@@ -203,7 +183,22 @@ class StateTrainer:
         return {
             "velocity_loss": total_velocity_loss / num_samples,
             "drift_mse": total_drift_mse / num_samples,
+            **self.evaluate_rollouts(data_loader.dataset),
         }
+
+    def evaluate_rollouts(self, dataset):
+        """Run every held-out trajectory to its end, starting from true context only."""
+        total, elements = 0.0, 0
+        seq_length = dataset.seq_length
+        for features, time in dataset.rollout_trajectories:
+            predicted = self.predict_rollout(torch.as_tensor(features[:seq_length]),
+                                             len(features) - seq_length, start_time=time).numpy()
+            size = features[seq_length:].size
+            total += drift_mse_from_rollout(predicted, features, condition_frames=seq_length) * size
+            elements += size
+        if not elements:
+            raise ValueError("No held-out future states for rollout evaluation.")
+        return dict(rollout_mse=total/elements, num_rollout_trajectories=len(dataset.rollout_trajectories))
 
     def predict_rollout(
         self,
@@ -236,9 +231,6 @@ class StateTrainer:
                 time = time + self.time_delta
 
         return generated.squeeze(0).cpu()
-
-    def load_best(self) -> dict:
-        return load_checkpoint(self.checkpoint_dir / "best.pt", self.model, self.optimizer)
 
     def _run_train_epoch(self, train_loader, epoch: int, epochs: int) -> float:
         self.model.train(self.update_parameters)
@@ -286,12 +278,9 @@ class StateTrainer:
             else torch.ones(targets.shape[-1], device=self.device, dtype=targets.dtype)
         )
 
-        true_first_velocity = (targets[:, 0, :] - context[:, -1, :]) / self.time_delta
-        predicted_velocity = self.model(context, time)
-        one_step_loss = F.mse_loss(
-            predicted_velocity / scales,
-            true_first_velocity / scales,
-        )
+        one_step_loss = velocity_loss(self.model, (context, targets[:, 0, :], time),
+                                      self.device, self.time_delta, self.dataset_name,
+                                      include_diffusion=True)
 
         rollout_terms = []
         for step in range(targets.shape[1]):
@@ -358,6 +347,7 @@ class StateTrainer:
                 tag=tag,
                 transform_angles=transform_angles,
             )
-            rollout_mse_values.append(drift_mse_from_rollout(predicted, ground_truth))
+            rollout_mse_values.append(drift_mse_from_rollout(predicted, ground_truth,
+                                                            condition_frames=seq_length))
 
         return float(np.mean(rollout_mse_values)) if rollout_mse_values else float("nan")

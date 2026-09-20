@@ -232,7 +232,6 @@ class LatentAnalogTrainer:
         minimum_epochs: int = 0,
     ) -> list[dict[str, object]]:
         history: list[dict[str, object]] = []
-        best_mse = float("inf")
         for epoch in range(0, epochs + 1):
             train_loss = None if epoch == 0 else self.train_epoch(train_loader)
             validation_loss = self.evaluate_loader(validation_loader)
@@ -277,20 +276,7 @@ class LatentAnalogTrainer:
                 metrics["decoded_mse"],
             )
             metric = float(metrics["position_mse"])
-            if metric < best_mse:
-                best_mse = metric
-                save_checkpoint(
-                    self.checkpoint_dir / "best.pt",
-                    self.model,
-                    self.optimizer,
-                    epoch,
-                    metric,
-                    extra={"history": history, "fixed_sample": fixed_sample["name"]},
-                )
-                (self.result_dir / "best_metrics.json").write_text(
-                    json.dumps(record, indent=2), encoding="utf-8"
-                )
-            if epoch > 0 and checkpoint_every > 0 and epoch % checkpoint_every == 0:
+            if epoch > 0:
                 save_checkpoint(
                     self.checkpoint_dir / f"epoch_{epoch:03d}.pt",
                     self.model,
@@ -304,18 +290,4 @@ class LatentAnalogTrainer:
             )
             if epoch > 0:
                 self.scheduler.step()
-            if epoch >= minimum_epochs and float(metrics["position_r2_mean"]) >= target_r2:
-                self.logger.info("Similarity target reached at epoch %d.", epoch)
-                if epoch % plot_every != 0:
-                    full_prediction = np.concatenate((fixed_sample["context"][:, :3], prediction), axis=0)
-                    full_truth = np.concatenate((fixed_sample["context"][:, :3], fixed_sample["target_future"]), axis=0)
-                    self.save_figures(
-                        full_truth,
-                        full_prediction,
-                        len(fixed_sample["context"]),
-                        epoch,
-                        str(fixed_sample["name"]),
-                        str(fixed_sample["analog_name"]),
-                    )
-                break
         return history

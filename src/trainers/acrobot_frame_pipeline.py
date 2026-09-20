@@ -21,6 +21,8 @@ from src.utils.visualization import save_video_rollout_comparison
 class AcrobotFrameTrainer:
     def __init__(self, config, device, root, restoring=False):
         self.config, self.device = config, device
+        if not config.training.get("include_diffusion", True):
+            raise ValueError("PhiBE training requires include_diffusion=true.")
         d, m = config.dataset, config.model
         if d.mode != "window" or not d.normalize:
             raise ValueError("Image training requires window mode and normalize=true.")
