@@ -1,5 +1,4 @@
 # Reduced predictor for pipeline checks with the real pretrained image codec.
-# These settings are NOT a benchmark configuration.
 project:
   name: anonymous-forecasting
   dataset: kth
