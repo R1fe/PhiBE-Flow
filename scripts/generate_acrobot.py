@@ -1,4 +1,4 @@
-"""Generate deterministic Acrobot demonstration data, not a paper benchmark."""
+"""Generate deterministic zero-noise Acrobot demonstration data."""
 
 import argparse
 from pathlib import Path
@@ -33,7 +33,7 @@ def generate(output, trajectories=20, frames=60, fps=30.0, seed=42):
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("xb") as handle:
         np.savez_compressed(handle, t=times, y=np.stack(states).astype(np.float32),
-                            seed=seed, noise=0.0, purpose="deterministic_demo_not_benchmark")
+                            seed=seed, noise=0.0, purpose="deterministic_demo")
 
 
 def main():
@@ -44,7 +44,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
     generate(args.output, args.trajectories, args.frames, seed=args.seed)
-    print("Generated deterministic demonstration data. Do not report it as the original benchmark.")
+    print("Generated deterministic zero-noise demonstration data.")
 
 
 if __name__ == "__main__":

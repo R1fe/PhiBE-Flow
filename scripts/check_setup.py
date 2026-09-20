@@ -97,7 +97,7 @@ def check(config, root=ROOT, load_codec=False):
             report.update(latent_shape=list(z.shape), reconstruction_shape=list(reconstructed.shape))
     else:
         raise ValueError("Expected acrobot_angles, acrobot_frames, nse or kth.")
-    report["status"] = "local_assets_validated_not_a_convergence_claim"
+    report["status"] = "local_assets_validated"
     return report
 
 

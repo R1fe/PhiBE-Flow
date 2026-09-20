@@ -1,4 +1,4 @@
-"""Scan the public allowlist, not ignored local experiments. No anonymity guarantee."""
+"""Scan source files in the public allowlist for private metadata."""
 
 import argparse
 import json
@@ -55,22 +55,21 @@ def audit(root, deny_tokens=()):
     assets = json.loads((root/"assets.json").read_text(encoding="utf-8")) if (root/"assets.json").exists() else {"assets": {}}
     missing_assets = [name for name, item in assets["assets"].items() if not item.get("url") or not item.get("sha256")]
     return dict(file_count=len(files), findings=findings, source_scan_passed=not findings,
-                benchmark_assets_pending=missing_assets, project_license_present=(root/"LICENSE").is_file(),
-                manual_checks_required=["venue policy", "account identity", "Git history", "third-party rights", "data-host identity"],
-                status="source_scan_only_not_a_publication_approval")
+                assets_without_direct_download=missing_assets,
+                project_license_present=(root/"LICENSE").is_file())
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT)
     parser.add_argument("--deny-token", action="append", default=[], help="Local names/identifiers to scan; never stored in reports.")
-    parser.add_argument("--require-ready", action="store_true", help="Also fail for missing benchmark URLs or unselected project license.")
+    parser.add_argument("--require-ready", action="store_true", help="Also require direct asset URLs, checksums and a project LICENSE file.")
     args = parser.parse_args()
     report = audit(args.root, args.deny_token)
     print(json.dumps(report, indent=2))
     failed = bool(report["findings"])
     if args.require_ready:
-        failed |= bool(report["benchmark_assets_pending"]) or not report["project_license_present"]
+        failed |= bool(report["assets_without_direct_download"]) or not report["project_license_present"]
     raise SystemExit(1 if failed else 0)
 
 

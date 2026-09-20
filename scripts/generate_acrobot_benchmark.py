@@ -1,4 +1,4 @@
-"""Reproduce the supplied Acrobot generator recipe, including its solver caveats."""
+"""Generate Acrobot trajectories with seeded noisy-RHS RK45 integration."""
 
 import argparse
 import json
@@ -16,11 +16,7 @@ from src.physics import AcrobotSystem
 
 def generate(output, trajectories=10000, duration=8.0, fps=30.0, noise=0.5,
              seed=42, max_rhs_calls=2000000):
-    """Preserve legacy RK45/linspace behavior, not an Euler-Maruyama replacement.
-
-    The original did not set a seed. A seed now defines a reproducible new run;
-    it cannot recover the exact unpublished trajectories used in a paper.
-    """
+    """Run seeded RK45 integration with a linspace output time grid."""
     output = Path(output)
     if output.exists():
         raise FileExistsError("Refusing to overwrite existing Acrobot data.")
@@ -70,8 +66,7 @@ def generate(output, trajectories=10000, duration=8.0, fps=30.0, noise=0.5,
         "saved_frame_dt": float(times[1] - times[0]), "solver": "RK45",
         "rtol": 1e-3, "atol": 1e-6, "numpy_version": np.__version__,
         "scipy_version": scipy.__version__, "rhs_evaluations": evaluations,
-        "warning": "Random RHS evaluations are not a standard SDE discretization; "
-                   "exact historical paper data have not been recovered.",
+        "noise_application": "Independent Gaussian noise at every RK45 RHS evaluation.",
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("xb") as handle:

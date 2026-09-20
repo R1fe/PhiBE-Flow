@@ -33,7 +33,7 @@ def export(root, destination):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(content)
         entries[name] = content
-    manifest = {"status": "draft_pending_manual_release_checks", "files": {
+    manifest = {"schema_version": 1, "files": {
         name: hashlib.sha256(content).hexdigest() for name, content in sorted(entries.items())}}
     entries["SOURCE_MANIFEST.json"] = (json.dumps(manifest, indent=2)+"\n").encode()
     (destination/"SOURCE_MANIFEST.json").write_bytes(entries["SOURCE_MANIFEST.json"])
@@ -52,7 +52,7 @@ def main():
     parser.add_argument("--output", type=Path, default=ROOT/".release/anonymous-code")
     args = parser.parse_args()
     result = export(ROOT, args.output)
-    print(f"Exported {len(result['files'])} source files. This is a draft, not a publication approval.")
+    print(f"Exported {len(result['files'])} source files.")
 
 
 if __name__ == "__main__":
