@@ -49,7 +49,7 @@ training:
 visualization:
   enabled: true
   every_n_epochs: 1
-  num_fixed_test_samples: 3
+  num_fixed_samples: 3
   rollout_steps: 6
   rollout_plot_frames: 8
 

@@ -48,7 +48,7 @@ training:
 visualization:
   enabled: true
   every_n_epochs: 1
-  num_fixed_test_samples: 1
+  num_fixed_samples: 1
   rollout_plot_frames: 8
   fps: 10
 evaluation:
