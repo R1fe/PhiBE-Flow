@@ -129,21 +129,21 @@ def build_fixed_visualization_samples(
     return samples
 
 
-def build_fixed_nse_samples(test_dataset, num_samples: int, seed: int):
+def build_fixed_nse_samples(dataset, num_samples: int, seed: int):
     import torch
 
-    if num_samples <= 0 or not test_dataset.trajectories:
+    if num_samples <= 0 or not dataset.trajectories:
         return []
-    count = min(num_samples, len(test_dataset.trajectories))
+    count = min(num_samples, len(dataset.trajectories))
     indices = torch.randperm(
-        len(test_dataset.trajectories),
+        len(dataset.trajectories),
         generator=torch.Generator().manual_seed(seed + 1),
     )[:count].tolist()
     return [
         {
             "sample_id": sample_id,
             "trajectory_index": trajectory_index,
-            "trajectory": test_dataset.get_trajectory(trajectory_index).clone(),
+            "trajectory": dataset.get_trajectory(trajectory_index).clone(),
         }
         for sample_id, trajectory_index in enumerate(indices)
     ]
@@ -202,8 +202,8 @@ def train_nse(config, args, device) -> None:
         num_workers=int(config.dataset.num_workers),
         pin_memory=device.type == "cuda",
     )
-    test_loader = DataLoader(
-        test_dataset,
+    rollout_loader = DataLoader(
+        train_dataset,
         batch_size=int(config.dataset.batch_size),
         shuffle=False,
         num_workers=int(config.dataset.num_workers),
@@ -244,8 +244,8 @@ def train_nse(config, args, device) -> None:
     fixed_samples = []
     if bool(config.visualization.enabled):
         fixed_samples = build_fixed_nse_samples(
-            test_dataset,
-            int(config.visualization.num_fixed_test_samples),
+            train_dataset,
+            int(config.visualization.num_fixed_samples),
             int(config.training.seed),
         )
         manifest = [
@@ -255,7 +255,7 @@ def train_nse(config, args, device) -> None:
             }
             for sample in fixed_samples
         ]
-        manifest_path = resolve_path(PROJECT_ROOT, config.paths.result_dir) / "fixed_test_samples.json"
+        manifest_path = resolve_path(PROJECT_ROOT, config.paths.result_dir) / "fixed_train_samples.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
@@ -289,9 +289,9 @@ def train_nse(config, args, device) -> None:
     )
     trainer.fit(
         train_loader,
-        test_loader,
+        rollout_loader,
         epochs,
-        fixed_test_trajectories=fixed_samples,
+        fixed_train_trajectories=fixed_samples,
         visualize_every=int(config.visualization.every_n_epochs),
         rollout_steps=int(config.visualization.rollout_steps),
         rollout_plot_frames=int(config.visualization.rollout_plot_frames),
@@ -367,8 +367,8 @@ def main() -> None:
         shuffle=True,
         num_workers=int(config.dataset.num_workers),
     )
-    test_loader = DataLoader(
-        test_dataset,
+    rollout_loader = DataLoader(
+        train_dataset,
         batch_size=int(config.dataset.batch_size),
         shuffle=False,
         num_workers=int(config.dataset.num_workers),
@@ -436,10 +436,10 @@ def main() -> None:
     fixed_visualization_samples = []
     if bool(config.visualization.enabled):
         fixed_visualization_samples = build_fixed_visualization_samples(
-            test_trajectories,
+            train_trajectories,
             seq_length=int(config.dataset.seq_length),
             transform_angles=bool(config.dataset.transform_angles),
-            num_samples=int(config.visualization.num_fixed_test_samples),
+            num_samples=int(config.visualization.num_fixed_samples),
             rollout_steps=config.visualization.rollout_steps,
             seed=int(config.training.seed),
             trajectory_indices=[
@@ -457,10 +457,10 @@ def main() -> None:
             }
             for sample in fixed_visualization_samples
         ]
-        sample_manifest_path = resolve_path(PROJECT_ROOT, config.paths.result_dir) / "fixed_test_samples.json"
+        sample_manifest_path = resolve_path(PROJECT_ROOT, config.paths.result_dir) / "fixed_train_samples.json"
         sample_manifest_path.parent.mkdir(parents=True, exist_ok=True)
         sample_manifest_path.write_text(json.dumps(sample_manifest, indent=2), encoding="utf-8")
-        logger.info("Fixed test visualization samples: %s", sample_manifest)
+        logger.info("Fixed train visualization samples: %s", sample_manifest)
 
     trainer = StateTrainer(
         model=model,
@@ -489,7 +489,7 @@ def main() -> None:
     )
     trainer.fit(
         train_loader=train_loader,
-        test_loader=test_loader,
+        rollout_loader=rollout_loader,
         epochs=epochs,
         log_every=int(config.training.log_every),
         visualization_samples=fixed_visualization_samples,
