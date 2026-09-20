@@ -81,14 +81,14 @@ def velocity_loss(
     device: torch.device,
     time_delta: float = 1.0 / 30.0,
     dataset_name: str | None = None,
-    include_diffusion: bool = False,
+    include_diffusion: bool = True,
 ) -> torch.Tensor:
     """
     SDE-inspired objective from the source Acrobot training code.
 
     The model predicts a velocity field v(x_t, t). The loss combines the norm of the
-    field and its alignment with the empirical drift. The optional diffusion
-    term is retained for compatibility with the source method. Its Jacobian is
+    field and its alignment with the empirical drift. Diffusion is enabled by
+    default; disabling it is an explicit loss-level ablation. Its Jacobian is
     a spatial derivative at fixed t; time is not a state coordinate.
     """
     sequence, target, time = batch
@@ -156,23 +156,38 @@ def nse_velocity_loss(
     batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor],
     device: torch.device,
     time_delta: float = 1.0,
+    create_graph: bool = True,
 ) -> torch.Tensor:
-    """NSE image-space drift objective.
-
-    Unlike the Acrobot objective, this loss does not build a full Jacobian. It
-    sums all spatial elements per sample and includes the data-only ``||b||^2``
-    term used by the source implementation.
-    """
+    """NSE drift objective with exact spatial diffusion and the data-only ||b||^2 term."""
+    if time_delta <= 0:
+        raise ValueError("time_delta must be positive.")
     x0, x1, x2, time = (tensor.to(device, dtype=torch.float32) for tensor in batch)
-    error = (x2 - x1).detach()
-    true_drift = error / time_delta
-    predicted_drift = model(x1, time, condition=x0)
-    reduce_dims = tuple(range(1, predicted_drift.ndim))
+    with torch.enable_grad():
+        x1 = x1.detach().requires_grad_(True)
+        error = (x2 - x1).detach()
+        true_drift = error / time_delta
+        predicted_drift = model(x1, time.detach(), condition=x0.detach())
+        reduce_dims = tuple(range(1, predicted_drift.ndim))
+        velocity_sq = predicted_drift.square().sum(dim=reduce_dims)
+        alignment = 2.0 * (true_drift * predicted_drift).sum(dim=reduce_dims)
+        drift_sq = true_drift.square().sum(dim=reduce_dims)
+        diffusion = spatial_diffusion(predicted_drift, x1, error, time_delta, create_graph)
+        objective = (velocity_sq - alignment + drift_sq - diffusion).mean()
+        return objective if create_graph else objective.detach()
 
-    velocity_sq = predicted_drift.square().sum(dim=reduce_dims)
-    alignment = 2.0 * (true_drift * predicted_drift).sum(dim=reduce_dims)
-    drift_sq = true_drift.square().sum(dim=reduce_dims)
-    return (velocity_sq - alignment + drift_sq).mean()
+
+def spatial_diffusion(velocity, state, delta, time_delta, create_graph=True):
+    """Exact delta^T J_v delta / dt, including all cross-coordinate terms."""
+    delta = delta.detach()
+    if velocity.requires_grad:
+        vjp = torch.autograd.grad(velocity, state, grad_outputs=delta,
+                                  create_graph=create_graph, retain_graph=True,
+                                  allow_unused=True)[0]
+    else:
+        vjp = None
+    if vjp is None:
+        return torch.zeros(len(state), device=state.device, dtype=state.dtype)
+    return (vjp * delta).flatten(1).sum(1) / time_delta
 
 
 def nse_prediction_mse(
@@ -208,9 +223,7 @@ def kth_velocity_loss(model, current, reference, target, time, time_delta=1.0,
         dims = tuple(range(1, z.ndim))
         objective = velocity.square().sum(dims) - 2 * (delta * velocity).sum(dims) / time_delta
         if include_diffusion:
-            vjp = torch.autograd.grad(velocity, z, grad_outputs=delta,
-                                      create_graph=create_graph, retain_graph=create_graph)[0]
-            objective = objective - (vjp * delta).sum(dims) / time_delta
+            objective = objective - spatial_diffusion(velocity, z, delta, time_delta, create_graph)
         return objective.mean() if create_graph else objective.mean().detach()
 
 
