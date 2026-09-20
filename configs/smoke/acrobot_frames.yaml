@@ -60,6 +60,3 @@ paths:
   log_dir: experiments/acrobot_frames_smoke/logs
   result_dir: experiments/acrobot_frames_smoke/results
   figure_dir: experiments/acrobot_frames_smoke/figures
-notes:
-  status: pipeline_smoke_test_only
-  comment: No pretrained weights; small independent codec, not the GPE paper experiment.

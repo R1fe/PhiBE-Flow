@@ -5,9 +5,9 @@ project:
   dataset: kth
 dataset:
   name: kth
+  split_protocol: official_subjects
+  merge_official_validation: false
   dataset_path: data/kth
-  train_ratio: 0.8
-  test_ratio: 0.2
   batch_size: 1
   num_workers: 0
   image_size: 64
