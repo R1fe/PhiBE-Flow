@@ -55,7 +55,7 @@ def create_shard(root):
 def tiny_config(root):
     config = load_config(ROOT / "configs/kth.yaml")
     config.dataset.update(dataset_path=str(root), image_size=8, condition_frames=2,
-                          prediction_frames=3, batch_size=2, num_workers=0)
+                          prediction_frames=3, batch_size=2, num_workers=0, split_protocol="random_video")
     config.model.update(state_size=2, state_res=[4, 4], inner_dim=16, heads=2,
                         depth=1, mid_depth=1, dropout=0.0)
     config.training.update(epochs=1, max_steps=10, warmup_steps=0, device="cpu")
@@ -258,6 +258,8 @@ class KTHTests(unittest.TestCase):
                     train.main()
                 checkpoint = Path(config.paths.checkpoint_dir) / "epoch_001.pt"
                 payload = torch.load(checkpoint, weights_only=False)
+                self.assertIn("data_identity", payload)
+                self.assertFalse((Path(config.paths.checkpoint_dir) / "best.pt").exists())
                 self.assertEqual(payload["global_step"], 2)
                 self.assertTrue((Path(config.paths.figure_dir)/"epoch_001/sample_00.gif").exists())
                 with patch.object(sys, "argv", ["eval.py", "--config", str(config_path)]):

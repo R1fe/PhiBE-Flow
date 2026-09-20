@@ -1,4 +1,5 @@
 import logging
+import json
 import os
 from pathlib import Path
 import pickle
@@ -194,8 +195,12 @@ class TimeConditioningTests(unittest.TestCase):
                         train.main()
                     with patch.object(sys, "argv", ["eval.py", "--config", str(config_path)]):
                         evaluate.main()
-                    self.assertTrue((directory / "checkpoint_dir" / "best.pt").exists())
+                    self.assertFalse((directory / "checkpoint_dir" / "best.pt").exists())
+                    self.assertTrue((directory / "checkpoint_dir" / "epoch_001.pt").exists())
                     self.assertTrue((directory / "result_dir" / "eval_metrics.json").exists())
+                    metrics = json.loads((directory / "result_dir" / "eval_metrics.json").read_text())
+                    self.assertIn("rollout_mse", metrics)
+                    self.assertEqual(metrics["num_rollout_trajectories"], 1)
                     self.assertTrue(list((directory / "figure_dir").rglob("*rollout.png")))
                 finally:
                     for logger_name in ("train", "eval", "train_nse", "eval_nse"):
