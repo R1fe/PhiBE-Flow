@@ -137,10 +137,12 @@ class ReleasePipelineTests(unittest.TestCase):
     def test_release_export_excludes_assets_history_and_uses_fixed_timestamps(self):
         report = audit(ROOT)
         self.assertEqual(report["findings"], [])
-        self.assertIn("nse_dataset", report["benchmark_assets_pending"])
+        self.assertIn("nse_dataset", report["assets_without_direct_download"])
         with tempfile.TemporaryDirectory() as tmp:
             destination = Path(tmp)/"anonymous-code"
             manifest = export(ROOT, destination)
+            self.assertEqual(manifest["schema_version"], 1)
+            self.assertNotIn("status", manifest)
             names = set(manifest["files"])
             self.assertNotIn("scripts/demo.py", names)
             self.assertNotIn("IMPLEMENTATION_STATUS_zh-CN.md", names)
