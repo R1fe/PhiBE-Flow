@@ -80,6 +80,7 @@ class AcrobotAnglesDataset(Dataset):
         self.transform_angles = transform_angles
         self.prediction_horizon = prediction_horizon
         self.samples: list[tuple[np.ndarray, np.ndarray, float]] = []
+        self.rollout_trajectories = []
 
         for trajectory in trajectories:
             time_steps = trajectory["t"]
@@ -90,6 +91,7 @@ class AcrobotAnglesDataset(Dataset):
 
             if len(time_steps) < seq_length + prediction_horizon:
                 continue
+            self.rollout_trajectories.append((features, float(time_steps[seq_length - 1])))
 
             window_count = len(time_steps) - seq_length - prediction_horizon + 1
             for start in range(window_count):

@@ -1,8 +1,13 @@
 """Lazy HDF5 KTH clips with video-level splits and explicit frame times."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 import math
+import hashlib
+import json
+import re
 
 import cv2
 import h5py
@@ -16,6 +21,23 @@ class KTHVideo:
     shard: Path
     key: str
     length: int
+    subject: int | None = None
+    source: str = ""
+
+
+# Subject IDs from the official 00sequences.txt, not inferred from shard names.
+OFFICIAL_TRAIN = frozenset(range(11, 19))
+OFFICIAL_VALIDATION = frozenset((1, 4, 19, 20, 21, 23, 24, 25))
+OFFICIAL_TEST = frozenset((2, 3, 5, 6, 7, 8, 9, 10, 22))
+
+
+def subject_from_source(source):
+    match = re.search(r"(?:^|[/\\])person(\d{2})_", str(source))
+    return int(match.group(1)) if match else None
+
+
+def _digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def _frame_store(handle, key):
@@ -31,6 +53,11 @@ def discover_kth_videos(root):
         raise FileNotFoundError(f"No KTH HDF5 shards found under {root}.")
     records = []
     for shard in shards:
+        sidecar = shard.with_suffix(".json")
+        metadata = {}
+        if sidecar.is_file():
+            metadata = {str(item["key"]): item for item in
+                        json.loads(sidecar.read_text(encoding="utf-8")).get("videos", [])}
         with h5py.File(shard, "r") as handle:
             keys = list(handle["len"].keys()) if "len" in handle else [k for k in handle if k.isdigit()]
             for key in sorted(keys, key=lambda k: (not k.isdigit(), int(k) if k.isdigit() else k)):
@@ -38,7 +65,15 @@ def discover_kth_videos(root):
                 length = int(handle["len"][key][()]) if "len" in handle else len(store)
                 if len(store) < length:
                     raise ValueError(f"Invalid video length in {shard}:{key}.")
-                records.append(KTHVideo(shard.resolve(), key, length))
+                source = handle[key].attrs.get("source", metadata.get(key, {}).get("source", ""))
+                source = source.decode() if isinstance(source, bytes) else str(source)
+                inferred = subject_from_source(source or key)
+                subject = handle[key].attrs.get("subject_id", inferred)
+                subject = None if subject is None else int(subject)
+                if subject is not None and (subject not in range(1, 26) or
+                                             (inferred is not None and inferred != subject)):
+                    raise ValueError(f"Invalid or conflicting subject metadata for video {key}.")
+                records.append(KTHVideo(shard.resolve(), key, length, subject, source))
     if not records:
         raise ValueError("KTH shards contain no videos.")
     return records
@@ -122,17 +157,51 @@ class KTHDataset(Dataset):
 
 def build_kth_datasets(config, project_root):
     from src.utils.config import resolve_path
+    from src.utils.download import sha256_file
 
     data = config.dataset
     frames = int(data.condition_frames) + int(data.prediction_frames)
     if int(data.condition_frames) < 2 or int(data.prediction_frames) < 1:
         raise ValueError("KTH needs at least 2 conditioning frames and 1 predicted frame.")
     stride = int(data.frame_stride)
-    records = discover_kth_videos(resolve_path(project_root, data.dataset_path))
-    eligible = [record for record in records if record.length >= (frames-1)*stride+1]
-    train, test = split_kth_videos(eligible, float(data.train_ratio), float(data.test_ratio), int(config.training.seed))
+    root = resolve_path(project_root, data.dataset_path).resolve()
+    records = discover_kth_videos(root)
+    protocol = data.get("split_protocol", "official_subjects")
+    if protocol == "official_subjects":
+        if any(record.subject is None for record in records):
+            raise ValueError("Official KTH splitting requires subject metadata. Re-run prepare_kth.py "
+                             "or supply the converter's matching JSON sidecar; numeric IDs alone are insufficient.")
+        train_subjects = OFFICIAL_TRAIN
+        if data.get("merge_official_validation", False):
+            train_subjects = train_subjects | OFFICIAL_VALIDATION
+        train = [record for record in records if record.subject in train_subjects]
+        test = [record for record in records if record.subject in OFFICIAL_TEST]
+    elif protocol == "random_video":
+        train, test = split_kth_videos(records, float(data.get("train_ratio", 0.8)),
+                                      float(data.get("test_ratio", 0.2)), int(config.training.seed))
+    else:
+        raise ValueError("split_protocol must be official_subjects or random_video.")
+    base = root.parent if root.is_file() else root
+    def describe(record):
+        return dict(shard=record.shard.relative_to(base).as_posix(), key=record.key,
+                    length=record.length, subject=record.subject, source=record.source)
+    partitions = {"train": [describe(r) for r in train], "test": [describe(r) for r in test]}
+    shards = {p.relative_to(base).as_posix(): sha256_file(p) for p in sorted({r.shard for r in records})}
+    identity = dict(version=1, protocol=protocol,
+                    dataset_sha256=_digest(dict(shards=shards, videos=[describe(r) for r in records])),
+                    split_sha256=_digest(partitions), image_size=int(data.image_size))
+    # Membership is fixed before horizon-dependent eligibility filtering.
+    span = (frames - 1) * stride + 1
+    train = [record for record in train if record.length >= span]
+    test = [record for record in test if record.length >= span]
     kwargs = dict(frames_per_sample=frames, frame_stride=stride, image_size=int(data.image_size),
                   frame_time_delta=float(data.frame_time_delta), time_origin=float(data.time_origin),
                   seed=int(config.training.seed))
-    return (KTHDataset(train, random_time=True, horizontal_flip=bool(data.horizontal_flip), **kwargs),
-            KTHDataset(test, random_time=False, **kwargs))
+    datasets = (KTHDataset(train, random_time=True, horizontal_flip=bool(data.horizontal_flip), **kwargs),
+                KTHDataset(test, random_time=False, **kwargs))
+    for dataset in datasets:
+        dataset.data_identity = identity
+        dataset.split_manifest = dict(identity=identity, partitions=partitions,
+                                     eligible_train=[describe(r) for r in train],
+                                     eligible_test=[describe(r) for r in test])
+    return datasets
