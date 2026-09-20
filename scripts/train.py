@@ -317,6 +317,8 @@ def main() -> None:
     config = load_config(config_path)
     from src.utils.cli import apply_runtime_arguments
     apply_runtime_arguments(config, args)
+    if not config.training.get("include_diffusion", True):
+        raise ValueError("PhiBE training requires include_diffusion=true.")
 
     set_seed(int(config.training.seed))
     device = build_device(config.training.device)
@@ -494,8 +496,6 @@ def main() -> None:
         figure_dir=resolve_path(PROJECT_ROOT, config.paths.figure_dir),
         transform_angles=bool(config.dataset.transform_angles),
         visualize_every=int(config.visualization.every_n_epochs),
-        checkpoint_every=int(config.training.get("checkpoint_every", 1)),
-        selection_metric=str(config.training.get("selection_metric", "drift_mse")),
     )
 
 

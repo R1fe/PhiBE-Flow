@@ -85,7 +85,7 @@ def check(config, root=ROOT, load_codec=False):
         if any(h < 1 or h > int(data.prediction_frames) for h in config.evaluation.horizons):
             raise ValueError("Metric horizons must not exceed prediction_frames.")
         report.update(train_videos=len(train), test_videos=len(test), sample_shape=list(clip.shape),
-                      codec_sha256=digest)
+                      codec_sha256=digest, data_identity=train.data_identity)
         if load_codec:
             from src.models.vqvae import VQVAE
             codec = VQVAE(weight, chunk_size=1)
@@ -96,7 +96,7 @@ def check(config, root=ROOT, load_codec=False):
                 raise ValueError("KTH codec returned non-finite values.")
             report.update(latent_shape=list(z.shape), reconstruction_shape=list(reconstructed.shape))
     else:
-        raise ValueError("Only acrobot_angles, nse and kth have unified train/eval pipelines.")
+        raise ValueError("Expected acrobot_angles, acrobot_frames, nse or kth.")
     report["status"] = "local_assets_validated_not_a_convergence_claim"
     return report
 

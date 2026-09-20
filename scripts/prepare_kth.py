@@ -1,7 +1,6 @@
 """Convert official KTH AVI files/ZIPs to one lazy-loading HDF5 shard.
 
-Each full AVI is one video. This is not the official action-recognition
-subsequence/subject protocol. No source-video subsequences cross our split.
+Each full AVI is one video; source filenames and subject IDs are retained.
 """
 
 import argparse
@@ -10,6 +9,7 @@ import json
 from pathlib import Path
 import tempfile
 import zipfile
+import re
 
 import cv2
 import h5py
@@ -50,7 +50,7 @@ def local_video(path, member):
         yield target
 
 
-def convert(source, output, image_size=64, min_frames=40):
+def convert(source, output, image_size=64, min_frames=1):
     if image_size < 1 or min_frames < 1:
         raise ValueError("image_size and min_frames must be positive.")
     sources = video_sources(Path(source))
@@ -93,8 +93,12 @@ def convert(source, output, image_size=64, min_frames=40):
                     skipped.append(name)
                     continue
                 key = str(len(records))
-                handle.create_dataset(key, data=np.stack(frames), compression="gzip", compression_opts=1,
-                                      chunks=(1, image_size, image_size, 3))
+                store = handle.create_dataset(key, data=np.stack(frames), compression="gzip", compression_opts=1,
+                                              chunks=(1, image_size, image_size, 3))
+                store.attrs["source"] = name
+                subject = re.match(r"person(\d{2})_", name)
+                if subject:
+                    store.attrs["subject_id"] = int(subject.group(1))
                 lengths[key] = len(frames)
                 records.append(dict(key=key, source=name, frames=len(frames)))
                 print(f"Converted {len(records)}/{len(sources)}: {name}", flush=True)
@@ -104,7 +108,7 @@ def convert(source, output, image_size=64, min_frames=40):
     except Exception:
         temporary.unlink(missing_ok=True)
         raise
-    manifest = dict(protocol="whole_avi_video_level_80_20", image_size=image_size,
+    manifest = dict(protocol="whole_avi_with_subject_metadata", image_size=image_size,
                     videos=records, skipped_short_videos=skipped)
     output.with_suffix(".json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest
