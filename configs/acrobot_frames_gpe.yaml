@@ -10,10 +10,10 @@ dataset:
   seq_length: 2
   prediction_horizon: 6
   time_lag: 1
-  stride: 4
+  stride: 1
   time_delta: 1.0
   time_origin: 0.0
-  max_frames: 24 # Small first run; set null to use full trajectories.
+  max_frames: null
   preload: false
   train_ratio: 0.8
   test_ratio: 0.2
@@ -22,14 +22,14 @@ dataset:
   num_workers: 0
 codec:
   type: gpe
-  initialization: random # Reconstruction warmup, NOT the upstream geometry objective.
+  initialization: pretrained
   trust_external_code: false # Pass --trust-external-code after reviewing the source.
-  source_dir: external/GPE_codes
+  source_dir: data/acrobot_frames/external/GPE_codes
   source_file: transportmodules/transportsMNIST.py
   encoder_class: TransportT
   decoder_class: TransportG
-  encoder_checkpoint: null # For pretrained mode, e.g. data/acrobot_frames/gpe_weights/T.pth
-  decoder_checkpoint: null # For pretrained mode, e.g. data/acrobot_frames/gpe_weights/S.pth
+  encoder_checkpoint: data/acrobot_frames/codec/T.pth
+  decoder_checkpoint: data/acrobot_frames/codec/S.pth
 model:
   latent_dim: 3
   width: 64
@@ -39,7 +39,7 @@ training:
   device: auto
   codec_epochs: 3
   codec_lr: 0.001
-  epochs: 3
+  epochs: 20
   lr: 0.0003
   max_grad_norm: 1.0
   include_diffusion: true
@@ -60,6 +60,3 @@ paths:
   log_dir: experiments/acrobot_frames_gpe/logs
   result_dir: experiments/acrobot_frames_gpe/results
   figure_dir: experiments/acrobot_frames_gpe/figures
-notes:
-  status: external_gpe_interface_first_run
-  comment: Reader-owned GPE architecture, no bundled source/weights; not paper reproduction.

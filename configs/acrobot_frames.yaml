@@ -67,7 +67,3 @@ paths:
   log_dir: experiments/acrobot_frames/logs
   result_dir: experiments/acrobot_frames/results
   figure_dir: experiments/acrobot_frames/figures
-
-notes:
-  status: from_scratch_pipeline_baseline
-  comment: Independent MLP codec, not GPE or a reproduction of the paper image experiment.

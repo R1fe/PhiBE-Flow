@@ -5,10 +5,9 @@ project:
 dataset:
   name: kth
   # Recursively discovers .hdf5/.h5 shards, including source train/val directories.
-  # Re-split pooled videos 8:2; this is NOT the original official KTH split.
+  split_protocol: official_subjects
+  merge_official_validation: false
   dataset_path: data/kth
-  train_ratio: 0.8
-  test_ratio: 0.2
   batch_size: 128
   num_workers: 0
   image_size: 64
