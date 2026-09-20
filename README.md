@@ -95,16 +95,20 @@ documented in [FVD.md](FVD.md).
 | Acrobot frames `dataset.prediction_horizon` | Future frames to generate |
 | KTH `dataset.prediction_frames` | Future frames to generate |
 | Acrobot frames / KTH `evaluation.horizons` | Exact-step and prefix-average metrics |
-| NSE `visualization.rollout_steps` | Plot length; numeric evaluation remains one-step |
+| NSE `visualization.rollout_steps` | Plot length; numeric rollout covers every test trajectory to its end |
 | `visualization.num_fixed_test_samples` | Fixed samples reused across epochs |
 | `training.checkpoint_path` | Load a compatible checkpoint |
 | `training.load_weights_only: true` | Run without parameter updates; requires a checkpoint |
 
 Outputs are written to `experiments/<name>/{checkpoints,logs,results,figures}`.
-Train/test splits are 80:20 by Acrobot trajectory, NSE file or KTH video, with
-no validation split. KTH does not use the official subject-disjoint protocol.
-Test visualizations reuse samples fixed before training. Report `last.pt` or
-a predetermined training budget rather than choosing weights by test error.
+Acrobot and NSE use 80:20 trajectory/file splits. KTH uses the official subject
+IDs, excluding validation subjects by default; see DATASETS.md. No validation
+loader or test-based model selection is used.
+Test visualizations reuse samples fixed before training. Each epoch evaluates
+all test trajectories/videos with autoregressive rollout and saves an independent
+`epoch_NNN.pt` plus `last.pt`. No `best.pt` is generated. Acrobot angle/NSE rollout
+metrics exclude the conditioning prefix and cover each trajectory to its end;
+image/KTH rollout uses the configured future horizon.
 
 Image metrics use future pixels in [0,1]. `*_at_h` measures frame h;
 `*_first_h` averages frames 1 through h. GIFs require an animation-capable viewer.
@@ -112,13 +116,18 @@ Logs include timing. Acrobot/NSE checkpoint loading is a warm start; KTH also
 restores optimizer, EMA and RNG state. Old time-independent checkpoints are
 not interchangeable with the current predictors.
 
+KTH checkpoints include full-shard data hashes and the unfiltered split hash.
+Changing the forecast horizon only filters within a fixed split. Loading fails
+if the data, split or required identity metadata differ; old unverified KTH
+checkpoints must be retrained under the recorded protocol.
+
 ## Code and Tests
 
 | Directory | Purpose |
 | --- | --- |
 | `configs/` | Dataset and experiment settings |
 | `src/datasets/` | Loading, splitting and sampling |
-| `src/method/loss.py` | PhiBE objectives, full spatial derivatives and separate NSE loss |
+| `src/method/loss.py` | PhiBE objectives with full spatial diffusion; NSE retains its data-only drift-square term |
 | `src/models/` | Predictors and codec interfaces |
 | `src/trainers/` | Optimization, rollout, evaluation and checkpointing |
 | `src/utils/` | Metrics, visualization, time, logging and I/O |
@@ -132,9 +141,8 @@ python scripts/export_release.py
 ```
 
 The exporter excludes data, weights, local experiments and Git history.
-Full benchmark convergence is not established by these tests. Random GPE-codec
-warmup uses reconstruction loss, not the original geometric objective; Acrobot
-image FVD is not implemented. NSE data/protocol verification remains incomplete.
+Full benchmark convergence is not established by these tests. Acrobot image
+FVD is not implemented. NSE data/protocol verification remains incomplete.
 
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for attribution and licensing
 status. GPE source and weights must be obtained separately.

@@ -39,8 +39,8 @@ detector with `rescale=False, resize=False, return_features=True`. Features
 have 400 elements. Tiny negative numerical Frechet results are clamped to zero.
 
 Keep sample IDs, clip starts, stride, context/future lengths, sample count, EMA
-selection and detector hash fixed across methods. The current 80:20 video split
-does not reproduce an external test shard or the official subject split.
+selection and detector hash fixed across methods. Evaluation uses the official
+test subjects and validates the checkpoint's data/split identity.
 `eval_metrics.json` records the detector hash and clip construction.
 
 ## Implementation References

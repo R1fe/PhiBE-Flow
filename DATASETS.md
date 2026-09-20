@@ -66,7 +66,25 @@ Caputo, ICPR 2004. The downloader records local archive hashes.
 center-crops to 64x64. HDF5 contains uint8 `[T,H,W,C]` arrays under numeric
 video IDs, with lengths under `len/<id>`. The loader also supports
 `video_id/frames` and numbered-frame groups. Pixels are mapped to [-1,1].
-Splitting is by whole video, not by official subject IDs or folder names.
+Splitting follows the [official subject lists](https://www.csc.kth.se/cvap/actions/00sequences.txt):
+
+- Train: 11, 12, 13, 14, 15, 16, 17, 18.
+- Test: 2, 3, 5, 6, 7, 8, 9, 10, 22.
+- Validation subjects 1, 4, 19, 20, 21, 23, 24, 25 are excluded by default.
+
+`dataset.merge_official_validation: true` explicitly merges validation subjects
+into training while keeping official test subjects held out. The default is false.
+This uses whole AVI clips, not the recognition benchmark's subsequence annotations.
+
+Conversion stores `source` and `subject_id` attributes on each video. Older
+shards may use the matching converter JSON sidecar with original filenames.
+If subject identity is unavailable, reconvert the official AVI files; numeric
+video keys cannot identify subjects and are rejected by the official split.
+Membership is assigned before filtering clip lengths. Startup hashes each full
+HDF5 shard and records the unfiltered partition identity in checkpoints; changing
+data or split prevents loading, while changing prediction length cannot move
+training videos into test. `random_video` is available only as an explicit
+alternative for synthetic tests, not the default experiment protocol.
 
 The [RIVER KTH codec](https://huggingface.co/cvg-unibe/river_kth_64) maps 64x64
 RGB to a 4x8x8 continuous latent; decoding includes vector quantization.

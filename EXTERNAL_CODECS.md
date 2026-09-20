@@ -4,27 +4,40 @@ Select `codec.type: mlp`, `gpe` or `torchscript`. All backends share the image
 train/eval pipeline. GPE source and weights are not bundled; obtain them from
 [upstream](https://github.com/wonjunee/GPE_codes) under its terms.
 
-## GPE Without Pretrained Weights
+## Reader-Trained GPE
 
 After installing the base project requirements and reviewing upstream code:
 
 ```bash
-git clone https://github.com/wonjunee/GPE_codes.git external/GPE_codes
+git clone https://github.com/wonjunee/GPE_codes.git data/acrobot_frames/external/GPE_codes
 python -m pip install --no-deps -r requirements-gpe.txt
+```
+
+Train a compatible codec in that external project using the Acrobot training
+trajectories only. Follow the upstream training procedure and check reconstruction
+quality before freezing it. Place the resulting weights at:
+
+```text
+data/acrobot_frames/codec/T.pth
+data/acrobot_frames/codec/S.pth
+```
+
+Then run the interface provided here:
+
+```bash
 python scripts/check_setup.py --config configs/acrobot_frames_gpe.yaml --trust-external-code --load-codec
 python scripts/train.py --config configs/acrobot_frames_gpe.yaml --trust-external-code
 python scripts/eval.py --config configs/acrobot_frames_gpe.yaml --trust-external-code
 ```
 
 Use `--data path/to/frames` and `--gpe-source path/to/GPE_codes` for other
-locations. The first-run config uses 24 frames per trajectory, two input frames,
-six future frames and three epochs per stage. Set `dataset.max_frames: null`
-for full trajectories.
+locations. The configuration uses full trajectories, two input frames and six
+future frames. The pretrained codec remains frozen during predictor training.
 
-Random `TransportT` / `TransportG` networks receive train-only reconstruction
-warmup, then remain frozen during PhiBE predictor training. This is **not**
-GPE's geometric training objective. Optional requirements support importing
-the architecture only, not every upstream training script.
+Optional requirements support importing the architecture, not every upstream
+training script. Set class names and latent dimensions to match your trained
+codec. Modified GPE source is not distributed here. The separate MLP configuration
+trains a lightweight codec locally; it does not replace external GPE training.
 
 ## Original T/S Checkpoints
 
@@ -35,7 +48,7 @@ codec:
   type: gpe
   initialization: pretrained
   trust_external_code: false
-  source_dir: external/GPE_codes
+  source_dir: data/acrobot_frames/external/GPE_codes
   source_file: transportmodules/transportsMNIST.py
   encoder_class: TransportT
   decoder_class: TransportG
