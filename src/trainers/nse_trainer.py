@@ -57,36 +57,38 @@ class NSETrainer:
     def fit(
         self,
         train_loader,
-        test_loader,
+        rollout_loader,
         epochs: int,
         *,
-        fixed_test_trajectories: list[dict] | None = None,
+        fixed_train_trajectories: list[dict] | None = None,
         visualize_every: int = 1,
         rollout_steps: int = 6,
         rollout_plot_frames: int = 8,
     ) -> dict[str, list[float]]:
-        history = {"train_velocity_loss": [], "test_velocity_loss": [], "test_mse": [], "test_rollout_mse": []}
+        if rollout_loader.dataset is not train_loader.dataset:
+            raise ValueError("Epoch rollout must use the training dataset.")
+        history = {"train_velocity_loss": [], "train_eval_velocity_loss": [], "train_mse": [], "train_rollout_mse": []}
 
         for epoch in range(1, epochs + 1):
             train_loss = self._train_epoch(train_loader, epoch, epochs)
-            test_metrics = self.evaluate_loader(test_loader)
+            train_metrics = self.evaluate_loader(rollout_loader)
             history["train_velocity_loss"].append(train_loss)
-            history["test_velocity_loss"].append(test_metrics["velocity_loss"])
-            history["test_mse"].append(test_metrics["mse"])
-            history["test_rollout_mse"].append(test_metrics["rollout_mse"])
+            history["train_eval_velocity_loss"].append(train_metrics["velocity_loss"])
+            history["train_mse"].append(train_metrics["mse"])
+            history["train_rollout_mse"].append(train_metrics["rollout_mse"])
 
             self.logger.info(
-                "Epoch %s/%s | train_velocity_loss=%.6f | test_velocity_loss=%.6f | test_mse=%.6f | test_rollout_mse=%.6f",
+                "Epoch %s/%s | train_velocity_loss=%.6f | train_eval_velocity_loss=%.6f | train_mse=%.6f | train_rollout_mse=%.6f",
                 epoch,
                 epochs,
                 train_loss,
-                test_metrics["velocity_loss"],
-                test_metrics["mse"],
-                test_metrics["rollout_mse"],
+                train_metrics["velocity_loss"],
+                train_metrics["mse"],
+                train_metrics["rollout_mse"],
             )
-            if fixed_test_trajectories and visualize_every > 0 and epoch % visualize_every == 0:
+            if fixed_train_trajectories and visualize_every > 0 and epoch % visualize_every == 0:
                 self.visualize_rollouts(
-                    fixed_test_trajectories,
+                    fixed_train_trajectories,
                     epoch=epoch,
                     rollout_steps=rollout_steps,
                     plot_frames=rollout_plot_frames,
@@ -95,7 +97,7 @@ class NSETrainer:
             if self.update_parameters:
                 for filename in (f"epoch_{epoch:03d}.pt", "last.pt"):
                     save_checkpoint(self.checkpoint_dir / filename, self.model, self.optimizer,
-                                    epoch=epoch, metric=test_metrics["mse"],
+                                    epoch=epoch, metric=train_metrics["mse"],
                                     extra={"global_step": self.global_step, "history": history})
 
         history_name = "train_history.json" if self.update_parameters else "frozen_history.json"
@@ -137,7 +139,7 @@ class NSETrainer:
             mse_total += size * float(nse_prediction_mse(self.model, batch, self.device, self.time_delta))
             samples += size
         if samples == 0:
-            raise ValueError("Received an empty NSE test loader.")
+            raise ValueError("Received an empty NSE evaluation loader.")
         rollout_total, elements, count = 0.0, 0, 0
         dataset = data_loader.dataset
         for index in range(len(dataset.trajectories)):
@@ -151,7 +153,7 @@ class NSETrainer:
             elements += error.numel()
             count += 1
         if not elements:
-            raise ValueError("No NSE test trajectories have future frames for rollout.")
+            raise ValueError("No NSE evaluation trajectories have future frames for rollout.")
         return {"velocity_loss": velocity_total / samples, "mse": mse_total / samples,
                 "rollout_mse": rollout_total / elements, "num_rollout_trajectories": count}
 

@@ -57,6 +57,7 @@ def _run_kth(config, args, device, project_root, evaluation=False):
                   pin_memory=device.type == "cuda")
     train_loader = DataLoader(train, shuffle=True, **kwargs)
     test_loader = DataLoader(test, shuffle=False, **kwargs)
+    rollout_loader = DataLoader(train, shuffle=False, **kwargs)
     model = KTHVelocityPredictor(**dict(config.model)).to(device)
     codec = VQVAE(codec_path, int(config.vqvae.chunk_size)).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=float(config.training.lr),
@@ -66,13 +67,15 @@ def _run_kth(config, args, device, project_root, evaluation=False):
     trainer = KTHTrainer(model, codec, optimizer, device, config, project_root, logger,
                          data_identity=train.data_identity)
     manifest = train.split_manifest
-    samples = fixed_kth_samples(test, int(config.visualization.num_fixed_test_samples),
+    sample_dataset = test if evaluation else train
+    samples = fixed_kth_samples(sample_dataset, int(config.visualization.num_fixed_samples),
                                 int(config.training.seed)) if config.visualization.enabled else []
     fixed_manifest = [{k: v for k, v in sample.items() if k not in ("frames", "times")} for sample in samples]
     def save_manifests():
         prefix = "eval_" if evaluation else ""
         (trainer.result_dir / (prefix + "split_manifest.json")).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        (trainer.result_dir / (prefix + "fixed_test_samples.json")).write_text(json.dumps(fixed_manifest, indent=2), encoding="utf-8")
+        sample_file = "eval_fixed_test_samples.json" if evaluation else "fixed_train_samples.json"
+        (trainer.result_dir / sample_file).write_text(json.dumps(fixed_manifest, indent=2), encoding="utf-8")
     logger.info("KTH train=%s test=%s videos | dt=%s | parameters=%s | frozen=%s",
                 len(train), len(test), trainer.dt, sum(p.numel() for p in model.parameters()),
                 not trainer.update_parameters)
@@ -117,4 +120,4 @@ def _run_kth(config, args, device, project_root, evaluation=False):
     epochs = args.epochs if args.epochs is not None else default_epochs
     if epochs < 1:
         raise ValueError("epochs must be positive.")
-    return trainer.fit(train_loader, test_loader, epochs, samples)
+    return trainer.fit(train_loader, rollout_loader, epochs, samples)

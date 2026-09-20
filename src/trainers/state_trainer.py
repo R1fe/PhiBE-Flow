@@ -66,7 +66,7 @@ class StateTrainer:
         self,
         train_loader,
         epochs: int,
-        test_loader=None,
+        rollout_loader=None,
         log_every: int = 1,
         visualization_samples: list[dict] | None = None,
         figure_dir: str | Path | None = None,
@@ -75,16 +75,22 @@ class StateTrainer:
     ) -> dict[str, list[float]]:
         history = {
             "train_velocity_loss": [],
-            "test_drift_mse": [],
-            "test_velocity_loss": [],
+            "train_drift_mse": [],
+            "train_eval_velocity_loss": [],
             "visualization_mse": [],
-            "test_rollout_mse": [],
+            "train_rollout_mse": [],
         }
+        if rollout_loader is None:
+            from torch.utils.data import DataLoader
+            rollout_loader = DataLoader(train_loader.dataset, batch_size=train_loader.batch_size or 1,
+                                        shuffle=False)
+        if rollout_loader.dataset is not train_loader.dataset:
+            raise ValueError("Epoch rollout must use the training dataset.")
         figure_dir = Path(figure_dir) if figure_dir is not None else None
 
         for epoch in range(1, epochs + 1):
             train_loss = self._run_train_epoch(train_loader, epoch, epochs)
-            test_metrics = self.evaluate_loader(test_loader) if test_loader is not None else None
+            train_metrics = self.evaluate_loader(rollout_loader)
             visualization_mse = None
 
             if (
@@ -101,30 +107,24 @@ class StateTrainer:
                 )
 
             history["train_velocity_loss"].append(train_loss)
-            history["test_drift_mse"].append(
-                None if test_metrics is None else test_metrics["drift_mse"]
-            )
-            history["test_velocity_loss"].append(
-                None if test_metrics is None else test_metrics["velocity_loss"]
-            )
+            history["train_drift_mse"].append(train_metrics["drift_mse"])
+            history["train_eval_velocity_loss"].append(train_metrics["velocity_loss"])
             history["visualization_mse"].append(visualization_mse)
-            history["test_rollout_mse"].append(None if test_metrics is None else test_metrics["rollout_mse"])
+            history["train_rollout_mse"].append(train_metrics["rollout_mse"])
 
             self.writer.add_scalar("loss/train_velocity", train_loss, epoch)
-            if test_metrics is not None:
-                self.writer.add_scalar("loss/test_velocity", test_metrics["velocity_loss"], epoch)
-                self.writer.add_scalar("loss/test_drift_mse", test_metrics["drift_mse"], epoch)
-                self.writer.add_scalar("test/rollout_mse", test_metrics["rollout_mse"], epoch)
+            self.writer.add_scalar("loss/train_eval_velocity", train_metrics["velocity_loss"], epoch)
+            self.writer.add_scalar("loss/train_drift_mse", train_metrics["drift_mse"], epoch)
+            self.writer.add_scalar("train/rollout_mse", train_metrics["rollout_mse"], epoch)
             if visualization_mse is not None:
-                self.writer.add_scalar("viz/test_rollout_mse", visualization_mse, epoch)
+                self.writer.add_scalar("viz/train_rollout_mse", visualization_mse, epoch)
 
             if epoch % log_every == 0:
                 message = "Epoch %s/%s | train_velocity_loss=%.6f" % (epoch, epochs, train_loss)
-                if test_metrics is not None:
-                    message += (
-                        " | test_velocity_loss=%.6f | test_drift_mse=%.6f | test_rollout_mse=%.6f"
-                        % (test_metrics["velocity_loss"], test_metrics["drift_mse"], test_metrics["rollout_mse"])
-                    )
+                message += (
+                    " | train_eval_velocity_loss=%.6f | train_drift_mse=%.6f | train_rollout_mse=%.6f"
+                    % (train_metrics["velocity_loss"], train_metrics["drift_mse"], train_metrics["rollout_mse"])
+                )
                 if visualization_mse is not None:
                     message += " | viz_rollout_mse=%.6f" % visualization_mse
                 self.logger.info(message)
@@ -138,7 +138,7 @@ class StateTrainer:
                     model=self.model,
                     optimizer=self.optimizer,
                     epoch=epoch,
-                    metric=None if test_metrics is None else test_metrics["drift_mse"],
+                    metric=train_metrics["drift_mse"],
                     extra={"history": history},
                 )
 

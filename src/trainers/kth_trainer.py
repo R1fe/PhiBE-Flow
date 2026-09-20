@@ -193,9 +193,11 @@ class KTHTrainer:
                 max_frames=int(self.config.visualization.rollout_plot_frames),
                 fps=float(self.config.visualization.fps))
 
-    def fit(self, train_loader, test_loader, epochs, fixed_samples):
+    def fit(self, train_loader, rollout_loader, epochs, fixed_samples):
         if self.data_identity is None:
             raise ValueError("KTH training requires a verified dataset/split identity.")
+        if rollout_loader.dataset is not train_loader.dataset:
+            raise ValueError("Epoch rollout must use the training dataset.")
         for epoch in range(self.start_epoch+1, self.start_epoch+epochs+1):
             if self.update_parameters and self.global_step >= int(self.config.training.max_steps):
                 break
@@ -204,7 +206,7 @@ class KTHTrainer:
             train_loss = self.train_epoch(train_loader, epoch)
             self._sync()
             train_end = perf_counter()
-            metrics = self.evaluate_loader(test_loader)
+            metrics = self.evaluate_loader(rollout_loader)
             self._sync()
             eval_end = perf_counter()
             every = int(self.config.visualization.every_n_epochs)
@@ -213,8 +215,9 @@ class KTHTrainer:
                 self.visualize(fixed_samples, tag)
             self._sync()
             record = dict(epoch=epoch, global_step=self.global_step, train_loss=train_loss,
-                          train_seconds=train_end-start, test_seconds=eval_end-train_end,
-                          visualization_seconds=perf_counter()-eval_end, **metrics)
+                          train_seconds=train_end-start, train_rollout_seconds=eval_end-train_end,
+                          rollout_split="train", visualization_seconds=perf_counter()-eval_end,
+                          **{"train_" + key: value for key, value in metrics.items()})
             self.history.append(record)
             self.logger.info("KTH %s", record)
             if self.update_parameters:

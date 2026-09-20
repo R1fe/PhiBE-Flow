@@ -171,6 +171,7 @@ def run_acrobot_frames(config, args, device, project_root, evaluation=False):
         kwargs = dict(batch_size=config.dataset.batch_size, num_workers=config.dataset.num_workers)
         train_loader = DataLoader(train, shuffle=True, **kwargs)
         test_loader = DataLoader(test, shuffle=False, **kwargs)
+        rollout_loader = DataLoader(train, shuffle=False, **kwargs)
         checkpoint = config.training.checkpoint_path
         if evaluation:
             checkpoint = getattr(args, "checkpoint", None) or config.evaluation.checkpoint
@@ -182,19 +183,21 @@ def run_acrobot_frames(config, args, device, project_root, evaluation=False):
             else:
                 path = resolve_path(project_root, checkpoint)
             trainer.load(path, split)
-        count = int(config.visualization.num_fixed_test_samples) if config.visualization.enabled else 0
+        count = int(config.visualization.num_fixed_samples) if config.visualization.enabled else 0
         if count < 0 or int(config.visualization.every_n_epochs) < 1:
             raise ValueError("Invalid visualization count or interval.")
-        indices = torch.randperm(len(test), generator=torch.Generator().manual_seed(config.training.seed+1))[:count]
+        sample_dataset = test if evaluation else train
+        indices = torch.randperm(len(sample_dataset), generator=torch.Generator().manual_seed(config.training.seed+1))[:count]
         samples = []
         for sample_id, index in enumerate(indices.tolist()):
-            trajectory, start = test.indices[index]
+            trajectory, start = sample_dataset.indices[index]
             samples.append(dict(sample_id=sample_id, window_index=index,
-                                trajectory=test.trajectory_names[trajectory], start_frame=start,
-                                batch=test[index]))
+                                trajectory=sample_dataset.trajectory_names[trajectory], start_frame=start,
+                                batch=sample_dataset[index]))
         result_dir = trainer.dirs["result_dir"]
         (result_dir / "split_manifest.json").write_text(json.dumps(split, indent=2))
-        (result_dir / "fixed_test_samples.json").write_text(json.dumps(
+        sample_file = "eval_fixed_test_samples.json" if evaluation else "fixed_train_samples.json"
+        (result_dir / sample_file).write_text(json.dumps(
             [{k: v for k, v in sample.items() if k != "batch"} for sample in samples], indent=2))
         if evaluation:
             trainer.sync()
@@ -229,16 +232,18 @@ def run_acrobot_frames(config, args, device, project_root, evaluation=False):
             loss = trainer.train_epoch(train_loader)
             trainer.sync()
             train_end = perf_counter()
-            metrics = trainer.evaluate(test_loader)
+            metrics = trainer.evaluate(rollout_loader)
             trainer.sync()
-            test_end = perf_counter()
+            rollout_end = perf_counter()
             tag = ("epoch" if trainer.update_parameters else "frozen_epoch") + f"_{trainer.epoch:03d}"
             if trainer.epoch % int(config.visualization.every_n_epochs) == 0:
                 trainer.visualize(samples, tag)
             trainer.sync()
-            row = dict(epoch=trainer.epoch, train_velocity_loss=loss, **metrics,
-                       train_seconds=train_end-start, test_seconds=test_end-train_end,
-                       visualization_seconds=perf_counter()-test_end)
+            row = dict(epoch=trainer.epoch, train_velocity_loss=loss,
+                       **{"train_" + key: value for key, value in metrics.items()},
+                       rollout_split="train", train_seconds=train_end-start,
+                       train_rollout_seconds=rollout_end-train_end,
+                       visualization_seconds=perf_counter()-rollout_end)
             history.append(row)
             trainer.logger.info("Forecast %s", row)
             trainer.save(tag + ".pt", split)
