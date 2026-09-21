@@ -1,4 +1,4 @@
-# Local Data Only
+# Data 
 
 Follow [DATASETS.md](../DATASETS.md) to download/prepare data. Numeric arrays,
 videos, checkpoints and local metadata are excluded from the source release.
