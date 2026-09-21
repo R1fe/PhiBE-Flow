@@ -1,8 +1,6 @@
 # Data 
 
-Follow [DATASETS.md](../DATASETS.md) to download/prepare data. Numeric arrays,
-videos, checkpoints and local metadata are excluded from the source release.
-Never upload files here without checking redistribution rights and anonymity.
+Follow [DATASETS.md](../DATASETS.md) to download/prepare data. 
 
 - `acrobot_angles/`: trusted benchmark pickle, or generated numeric demo NPZ.
 - `acrobot_frames/`: optional loader-only frame sequences; no unified trainer.
